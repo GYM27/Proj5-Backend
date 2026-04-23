@@ -1,0 +1,15 @@
+# Maven - Compilação e Artefactos
+target/
+*.class
+*.war
+*.ear
+*.jar
+
+# IDE e Sistema
+.idea/
+*.iml
+.DS_Store
+
+# Logs do servidor
+*.log
+3. No Projeto
