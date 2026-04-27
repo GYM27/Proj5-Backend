@@ -75,4 +75,16 @@ public class NotificationService {
         notificationDao.markAllAsRead(user);
         return Response.ok().build();
     }
+
+    /**
+     * Retorna apenas o número de notificações não lidas.
+     * Útil para o "sininho" no Header carregar o estado inicial sem pedir a lista toda.
+     */
+    @GET
+    @Path("/unread-count")
+    public Response getUnreadCount(@HeaderParam("token") String token) {
+        UserEntity user = verifier.verifyUser(token);
+        Long count = notificationDao.countUnread(user);
+        return Response.ok(count).build();
+    }
 }

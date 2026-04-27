@@ -2,6 +2,7 @@ package aor.paj.projecto5.entity;
 
 import aor.paj.projecto5.utils.UserState;
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
 import aor.paj.projecto5.utils.UserRoles;
 
 import java.io.Serial;
@@ -55,8 +56,17 @@ public class UserEntity implements Serializable {
     @Column(name = "state", nullable = false)
     private UserState state = UserState.PENDING;
 
-    @Column()
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private java.time.LocalDateTime createdAt;
 
+    public java.time.LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(java.time.LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 
     @OneToMany(mappedBy = "owner", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private List<LeadEntity> leads= new ArrayList<>();

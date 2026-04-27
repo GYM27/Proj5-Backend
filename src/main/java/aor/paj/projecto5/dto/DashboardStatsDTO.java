@@ -1,6 +1,8 @@
 package aor.paj.projecto5.dto;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DashboardStatsDTO implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -14,6 +16,19 @@ public class DashboardStatsDTO implements Serializable {
     private long clientes;
     private long totalUsers;
     private long confirmedUsers;
+    private long meusLeads;
+    private long meusClientes;
+    private List<GrowthDataDTO> growthData = new ArrayList<>();
+    private List<GrowthDataDTO> leadsGrowthData = new ArrayList<>();
+
+    // DTO para o gráfico de crescimento (ISO8601)
+    public static class GrowthDataDTO implements Serializable {
+        private String date; // YYYY-MM-DD
+        private long count;
+        public GrowthDataDTO(String date, long count) { this.date = date; this.count = count; }
+        public String getDate() { return date; }
+        public long getCount() { return count; }
+    }
 
     public DashboardStatsDTO() {
     }
@@ -44,4 +59,16 @@ public class DashboardStatsDTO implements Serializable {
 
     public long getConfirmedUsers() { return confirmedUsers; }
     public void setConfirmedUsers(long confirmedUsers) { this.confirmedUsers = confirmedUsers; }
+
+    public List<GrowthDataDTO> getGrowthData() { return growthData; }
+    public void setGrowthData(List<GrowthDataDTO> growthData) { this.growthData = growthData; }
+
+    public List<GrowthDataDTO> getLeadsGrowthData() { return leadsGrowthData; }
+    public void setLeadsGrowthData(List<GrowthDataDTO> leadsGrowthData) { this.leadsGrowthData = leadsGrowthData; }
+
+    public long getMeusLeads() { return meusLeads; }
+    public void setMeusLeads(long meusLeads) { this.meusLeads = meusLeads; }
+
+    public long getMeusClientes() { return meusClientes; }
+    public void setMeusClientes(long meusClientes) { this.meusClientes = meusClientes; }
 }

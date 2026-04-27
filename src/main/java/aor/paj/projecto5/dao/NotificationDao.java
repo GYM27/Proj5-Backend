@@ -26,13 +26,25 @@ public class NotificationDao extends AbstractDao<NotificationEntity> implements 
 
     /**
      * Conta as notificações não lidas de um utilizador.
+     * Agora inclui também as MENSAGENS de CHAT não lidas para o sininho no Header ser real.
      */
     public Long countUnread(UserEntity user) {
-        return em.createQuery(
+        // Conta notificações de sistema
+        Long systemNotifications = em.createQuery(
                 "SELECT COUNT(n) FROM NotificationEntity n WHERE n.receiver = :user AND n.isRead = false", 
                 Long.class)
                 .setParameter("user", user)
                 .getSingleResult();
+
+        // Conta mensagens de chat não lidas
+        Long unreadMessages = em.createQuery(
+                "SELECT COUNT(m) FROM MessageEntity m WHERE m.receiver = :user AND m.isRead = false", 
+                Long.class)
+                .setParameter("user", user)
+                .getSingleResult();
+
+        return (systemNotifications != null ? systemNotifications : 0L) + 
+               (unreadMessages != null ? unreadMessages : 0L);
     }
 
     /**

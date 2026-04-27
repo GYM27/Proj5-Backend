@@ -1,6 +1,7 @@
 package aor.paj.projecto5.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.io.Serializable;
 
@@ -58,12 +59,24 @@ public class ClientsEntity implements Serializable {
     @Column(name = "softDelete", nullable = false)
     private boolean softDelete = false;
 
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private java.time.LocalDateTime createdAt;
+
     // Relação: Muitos Clientes pertencem a 1 Utilizador
     @ManyToOne
     @JoinColumn(name = "owner_id", nullable = false)
     private UserEntity owner;
 
     public ClientsEntity() {
+    }
+
+    public java.time.LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(java.time.LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     // Getters e Setters
