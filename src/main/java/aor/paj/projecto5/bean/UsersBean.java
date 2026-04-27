@@ -7,6 +7,7 @@ import aor.paj.projecto5.dto.UserBaseDTO;
 import aor.paj.projecto5.dto.UserDTO;
 import aor.paj.projecto5.entity.ConfirmationTokenEntity;
 import aor.paj.projecto5.entity.UserEntity;
+import aor.paj.projecto5.utils.PasswordUtils;
 import aor.paj.projecto5.utils.UserRoles;
 import aor.paj.projecto5.utils.UserState;
 import jakarta.ejb.Stateless;
@@ -17,17 +18,24 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
- * Enterprise JavaBean (EJB) Stateless responsável pela lógica de negócio
- * e gestão de Utilizadores no sistema.
- * * Implementa um fluxo de pré-registo baseado em tokens de email e
- * utiliza métodos de mapeamento centralizados para garantir a integridade dos dados.
+ * O meu EJB principal para a gestão de Utilizadores (Stateless porque não preciso 
+ * de guardar estado do cliente entre chamadas, o que poupa memória ao servidor).
+ * 
+ * Foi aqui que decidi centralizar toda a lógica: desde o envio do convite inicial 
+ * por email (pré-registo) até às edições de perfil (com as proteções para não deixarem 
+ * alterar usernames ou passwords indevidamente).
  */
 @Stateless
 public class UsersBean implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
+
+    private static final Logger logger = LogManager.getLogger(UsersBean.class);
 
     @Inject
     private UserDao userDao;
@@ -38,17 +46,20 @@ public class UsersBean implements Serializable {
     @Inject
     private ConfirmationTokenBean confirmationTokenBean;
 
+    @Inject
+    private NotificationBean notificationBean;
+
     // =================================================================================
     // MÉTODOS DE MAPEAMENTO (DRY - DON'T REPEAT YOURSELF)
     // =================================================================================
 
     /**
      * SENTIDO: DB -> FRONTEND
-     * Preenche os campos comuns a qualquer DTO (Base ou Completo) a partir de uma entidade.
-     * Centraliza a conversão de nomes de campos (ex: contact -> cellphone).
+     * Criei este método auxiliar para não ter de repetir código sempre que preciso 
+     * de converter uma entidade para DTO. Mapeia apenas os dados seguros/públicos.
      *
-     * @param entity A entidade de origem vinda da base de dados.
-     * @param dto O DTO de destino (pode ser UserBaseDTO ou UserDTO devido à herança).
+     * @param entity A entidade que fui buscar à base de dados.
+     * @param dto O DTO que vou preencher (pode ser UserBaseDTO ou o UserDTO completo).
      */
     private void fillBaseData(UserEntity entity, UserBaseDTO dto) {
         dto.setId(entity.getId());
@@ -111,7 +122,8 @@ public class UsersBean implements Serializable {
         if (entity == null) return null;
         UserDTO dto = new UserDTO();
         fillBaseData(entity, dto);
-        dto.setPassword(entity.getPassword());
+        // REMOVIDO: Nunca enviamos a password (nem o hash) para o frontend por segurança.
+        // Se o utilizador quiser mudar a password, o DTO de update tratará disso se o campo for preenchido.
         return dto;
     }
 
@@ -119,12 +131,16 @@ public class UsersBean implements Serializable {
     // FLUXO DE REGISTO EM DOIS PASSOS (PRÉ-REGISTO)
     // =================================================================================
 
+    @Inject
+    private EmailBean emailBean;
+
     /**
-     * PASSO 1: Inicia o processo de registo validando o email e gerando um token.
-     * Não cria o utilizador na base de dados nesta fase.
+     * PASSO 1 DO REGISTO: O Admin pede para convidar alguém.
+     * Em vez de criar logo o utilizador na BD, preferi gerar um token seguro 
+     * e enviar um link por email. Assim garanto que o email é real e válido.
      *
-     * @param email O email que o utilizador deseja registar.
-     * @throws WebApplicationException 409 se o email já estiver associado a uma conta ativa.
+     * @param email O email que vou convidar.
+     * @throws WebApplicationException Se o email já existir, bloqueio logo (409).
      */
     public void requestRegistration(String email) {
         if (userDao.findUserByEmail(email) != null) {
@@ -133,6 +149,21 @@ public class UsersBean implements Serializable {
 
         // Cria token associado apenas ao email
         String token = confirmationTokenBean.createTokenForEmail(email);
+        
+        // Constrói o link do frontend (ajusta o URL base se necessário)
+        // Por norma em dev é localhost:5173, ajusta o URL conforme o teu ambiente.
+        String frontendUrl = "http://localhost:5173"; 
+        String registerLink = frontendUrl + "/register?token=" + token + "&email=" + email;
+        
+        // Envia o email de forma assíncrona
+        String htmlBody = "<h1>Convite de Registo</h1>"
+                + "<p>Foste convidado para a plataforma Bridge CRM.</p>"
+                + "<p>Clica no link abaixo para concluíres o teu registo (válido por 24 horas):</p>"
+                + "<a href='" + registerLink + "'>" + registerLink + "</a>";
+                
+        emailBean.sendEmail(email, "Convite para Registo - Bridge CRM", htmlBody);
+        
+        logger.info("Convite de registo enviado com sucesso para: " + email);
     }
 
     /**
@@ -160,13 +191,21 @@ public class UsersBean implements Serializable {
 
         UserEntity newUser = new UserEntity();
         mapDtoToEntity(userDTO, newUser);
-        newUser.setPassword(userDTO.getPassword());
+        newUser.setPassword(PasswordUtils.hashPassword(userDTO.getPassword())); // Hashing no registo
 
         // Como o email foi validado pelo token, a conta nasce ACTIVE
         newUser.setState(UserState.ACTIVE);
         newUser.setUserRole(UserRoles.NORMAL);
 
         userDao.persist(newUser);
+
+        logger.info("Registo de novo utilizador concluído com sucesso para: " + newUser.getUsername() + " (E-mail: " + newUser.getEmail() + ")");
+
+        // Envia notificação para todos os administradores
+        List<UserEntity> admins = userDao.findUsersByRole(UserRoles.ADMIN);
+        for (UserEntity admin : admins) {
+            notificationBean.createNotification(admin, aor.paj.projecto5.utils.NotificationType.SYSTEM, "Novo utilizador registado: " + newUser.getUsername());
+        }
 
         // Remove o token para não ser reutilizado
         confirmationTokenBean.deleteToken(tokenEntity);
@@ -219,30 +258,56 @@ public class UsersBean implements Serializable {
     }
 
     /**
-     * Edita os dados do próprio utilizador autenticado.
+     * Edição do meu próprio perfil.
+     * Aqui garanti que o utilizador nunca consegue "injetar" um novo username 
+     * nem alterar os seus privilégios (cargo). A password só muda se ele preencher algo.
      *
-     * @param token Token de sessão ativa.
-     * @param userDTO Novos dados a aplicar.
+     * @param token O meu token de sessão (para saber quem sou).
+     * @param userDTO Os dados novos que enviei no formulário do Frontend.
      */
-    public void putEditOwnUser(String token, UserDTO userDTO) {
+    public void putEditOwnUser(String token, aor.paj.projecto5.dto.UserUpdateDTO userDTO) {
         UserEntity user = tokenBean.getUserEntityByToken(token);
         if (user == null) throw new WebApplicationException("Sessão inválida", 401);
 
-        UserEntity other = userDao.findUserByEmail(userDTO.getEmail());
-        if (other != null && !other.getId().equals(user.getId())) {
+        // Validação de email duplicado
+        UserEntity otherEmail = userDao.findUserByEmail(userDTO.getEmail());
+        if (otherEmail != null && !otherEmail.getId().equals(user.getId())) {
             throw new WebApplicationException("Email já em uso por outro utilizador.", 409);
         }
 
-        mapDtoToEntity(userDTO, user);
-        user.setPassword(userDTO.getPassword());
+        // Validação de contacto duplicado (CRÍTICO: evita erro 500 da BD)
+        UserEntity otherContact = userDao.findUserByContact(userDTO.getCellphone());
+        if (otherContact != null && !otherContact.getId().equals(user.getId())) {
+            throw new WebApplicationException("Este contacto já está associado a outra conta.", 409);
+        }
+
+        // Atualização de campos permitidos
+        user.setFirstName(userDTO.getFirstName());
+        user.setLastName(userDTO.getLastName());
+        user.setEmail(userDTO.getEmail());
+        user.setContact(userDTO.getCellphone());
+        user.setPhoto(userDTO.getPhotoUrl());
+
+        // Username NÃO é atualizado (regra de negócio: imutável após registo)
+
+        // Só atualiza a password se o utilizador tiver preenchido o campo
+        if (userDTO.getPassword() != null && !userDTO.getPassword().isBlank()) {
+            user.setPassword(PasswordUtils.hashPassword(userDTO.getPassword())); // Hashing na edição de perfil
+        }
+
+        // EFETIVA A GRAVAÇÃO (CRÍTICO): Sem o merge, as alterações podem não ser persistidas.
+        userDao.merge(user);
+        
+        logger.info("Utilizador " + user.getUsername() + " atualizou o seu próprio perfil.");
     }
 
     /**
-     * Edição administrativa de qualquer utilizador.
-     * Permite alteração de Role e de State diretamente.
+     * Edição por parte do Admin (Super-Edição).
+     * Como Admin, eu posso mudar quase tudo (incluindo o Cargo e Estado), 
+     * mas decidi cortar o acesso à alteração da password por questões de privacidade.
      *
-     * @param id ID do utilizador alvo.
-     * @param dto Novos dados e metadados.
+     * @param id Quem eu estou a editar.
+     * @param dto Os novos dados (vindos do formulário de Admin).
      */
     public void putEditUser(Long id, UserBaseDTO dto) {
         UserEntity user = userDao.find(id);
@@ -253,14 +318,24 @@ public class UsersBean implements Serializable {
             throw new WebApplicationException("Email já associado a outra conta.", 409);
         }
 
-        mapDtoToEntity(dto, user);
+        // Atualização administrativa limitada
+        user.setFirstName(dto.getFirstName());
+        user.setLastName(dto.getLastName());
+        user.setEmail(dto.getEmail());
+        user.setContact(dto.getCellphone());
+        user.setPhoto(dto.getPhotoUrl());
 
+        // Admin pode alterar Role e State
         if (dto.getRole() != null) {
             user.setUserRole(UserRoles.valueOf(dto.getRole()));
         }
         if (dto.getState() != null) {
             user.setState(UserState.valueOf(dto.getState()));
         }
+        
+        // NOTA: Password e Username são ignorados nesta operação por segurança.
+        
+        logger.info("Perfil do utilizador (ID: " + id + ") foi atualizado administrativamente.");
     }
 
     /**
@@ -272,6 +347,7 @@ public class UsersBean implements Serializable {
         UserEntity user = userDao.find(id);
         if (user == null) throw new WebApplicationException("Não encontrado", 404);
         user.setState(UserState.DISABLED);
+        logger.info("Utilizador (ID: " + id + ") foi desativado (eliminação lógica).");
     }
 
     /**
@@ -283,6 +359,7 @@ public class UsersBean implements Serializable {
         UserEntity user = userDao.find(id);
         if (user == null) throw new WebApplicationException("Não encontrado", 404);
         user.setState(UserState.ACTIVE);
+        logger.info("Utilizador (ID: " + id + ") foi reativado.");
     }
 
     /**
@@ -297,6 +374,7 @@ public class UsersBean implements Serializable {
         UserEntity systemUser = userDao.findUserByUsername("deleted_user");
         userDao.transferOwnership(userToDelete, systemUser);
         userDao.hardDelete(id);
+        logger.info("Utilizador (ID: " + id + ") foi eliminado permanentemente e os dados foram transferidos para o utilizador de sistema.");
     }
 
     /**
@@ -309,9 +387,10 @@ public class UsersBean implements Serializable {
         if (loginDTO == null || loginDTO.getUsername() == null) return null;
 
         UserEntity userEntity = userDao.findUserByUsername(loginDTO.getUsername());
-
+        
+        // Uso o PasswordUtils para comparar o texto limpo com o hash guardado
         if (userEntity != null &&
-                userEntity.getPassword().equals(loginDTO.getPassword()) &&
+                PasswordUtils.checkPassword(loginDTO.getPassword(), userEntity.getPassword()) &&
                 userEntity.getState() == UserState.ACTIVE) {
 
             String token = tokenBean.generateNewToken(userEntity);
@@ -319,6 +398,9 @@ public class UsersBean implements Serializable {
             return new LoginResponseDTO(
                     userEntity.getId(),
                     userEntity.getFirstName(),
+                    userEntity.getLastName(),
+                    userEntity.getUsername(),
+                    userEntity.getEmail(),
                     userEntity.getUserRole(),
                     token,
                     userEntity.getPhoto()
@@ -344,6 +426,27 @@ public class UsersBean implements Serializable {
         return result;
     }
 
+    /**
+     * Obtém apenas os utilizadores ativos para o chat.
+     */
+    public List<UserBaseDTO> getAllActiveUsers() {
+        // Procuramos todos os utilizadores
+        List<UserEntity> entities = userDao.findAll();
+        List<UserBaseDTO> result = new ArrayList<>();
+
+        for (UserEntity u : entities) {
+            // Regra: Aparece se (está Ativo) OU (é Admin e não está Desativado)
+            boolean isActive = u.getState() == UserState.ACTIVE;
+            boolean isAdmin = u.getUserRole() != null && u.getUserRole().name().equals("ADMIN");
+            boolean isNonDisabledAdmin = isAdmin && u.getState() != UserState.DISABLED;
+            
+            if ((isActive || isNonDisabledAdmin) && !u.getUsername().equals("deleted_user")) {
+                result.add(convertToUserBaseDTO(u));
+            }
+        }
+        return result;
+    }
+
     // =================================================================================
     // RECUPERAÇÃO DE PASSWORD
     // =================================================================================
@@ -361,7 +464,18 @@ public class UsersBean implements Serializable {
         // Dizemos apenas que o email foi enviado para evitar que hackers saibam quem tem conta.
         if (user != null && user.getState() == UserState.ACTIVE) {
             String token = confirmationTokenBean.createTokenForEmail(email);
-            System.out.println("DEBUG: Link de Recuperação para " + email + " -> http://localhost:3000/reset-password?token=" + token);
+            
+            String frontendUrl = "http://localhost:5173"; 
+            String resetLink = frontendUrl + "/reset-password?token=" + token + "&email=" + email;
+            
+            String htmlBody = "<h1>Recuperação de Password</h1>"
+                    + "<p>Recebemos um pedido para recuperar a password da tua conta.</p>"
+                    + "<p>Clica no link abaixo para definires uma nova password (válido por 24 horas):</p>"
+                    + "<a href='" + resetLink + "'>" + resetLink + "</a>"
+                    + "<p>Se não solicitaste esta recuperação, podes ignorar este email.</p>";
+                    
+            emailBean.sendEmail(email, "Recuperação de Password - Bridge CRM", htmlBody);
+            logger.info("Email de recuperação de password enviado para: " + email);
         }
     }
 
@@ -385,8 +499,8 @@ public class UsersBean implements Serializable {
             throw new WebApplicationException("Utilizador não encontrado.", 404);
         }
 
-        // 3. Atualiza a password
-        user.setPassword(newPassword);
+        // 3. Atualiza a password com hash
+        user.setPassword(PasswordUtils.hashPassword(newPassword));
         userDao.merge(user);
 
         // 4. Limpa o token para não ser usado duas vezes

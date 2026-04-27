@@ -2,6 +2,7 @@ package aor.paj.projecto5.bean;
 
 import aor.paj.projecto5.dao.UserDao;
 import aor.paj.projecto5.entity.UserEntity;
+import aor.paj.projecto5.utils.PasswordUtils;
 import aor.paj.projecto5.utils.UserRoles;
 import aor.paj.projecto5.utils.UserState;
 import jakarta.annotation.PostConstruct;
@@ -26,7 +27,7 @@ public class DatabaseBootstrap {
             
             // Preenchimento dos campos obrigatórios conforme a tua UserEntity
             admin.setUsername("admin");
-            admin.setPassword("admin123"); // Idealmente usar hash aqui depois
+            admin.setPassword(PasswordUtils.hashPassword("admin123")); // Agora com HASH seguro!
             admin.setEmail("admin@paj.com");
             admin.setFirstName("System");
             admin.setLastName("Administrator");

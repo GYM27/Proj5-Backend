@@ -1,11 +1,12 @@
 package aor.paj.projecto5.dto;
 
 import aor.paj.projecto5.utils.LeadState;
+import jakarta.json.bind.annotation.JsonbDateFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.json.bind.annotation.JsonbTransient;
 
-import java.time.LocalDateTime;
+
 
 public class LeadDTO {
 
@@ -23,7 +24,7 @@ public class LeadDTO {
     private String firstName;
     private String lastName;
     private String name;
-    private LocalDateTime date;
+    private String date;
     private boolean softDeleted;
 
     public LeadDTO(Long id, String titulo, String descricao) {
@@ -64,11 +65,11 @@ public class LeadDTO {
         this.name = name;
     }
 
-    public LocalDateTime getDate() {
+    public String getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(String date) {
         this.date = date;
     }
 

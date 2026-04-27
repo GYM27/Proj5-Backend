@@ -11,6 +11,8 @@ import jakarta.ws.rs.core.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.List;
+
 /**
  * Serviço REST otimizado para a gestão de mensagens.
  * Atua apenas como porta de entrada, validando a segurança antes de delegar a lógica.
@@ -47,6 +49,28 @@ public class MessageService {
         // Passo a Entity do sender já validada para evitar novas procuras desnecessárias.
         messageBean.saveAndSendMessage(sender, messageDto);
 
-        return Response.ok("Mensagem processada").build();
+        return Response.ok("{\"message\":\"Mensagem processada\"}").build();
+    }
+
+    /**
+     * Recupera o histórico de mensagens do utilizador autenticado.
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<MessageDto> getMessages(@HeaderParam("token") String token) {
+        UserEntity user = userVerificationBean.verifyUser(token);
+        return messageBean.getHistory(user);
+    }
+
+    /**
+     * Marca o histórico de mensagens com um utilizador específico como lidas.
+     */
+    @PATCH
+    @Path("/read/{sender}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response markAsRead(@HeaderParam("token") String token, @PathParam("sender") String senderUsername) {
+        UserEntity receiver = userVerificationBean.verifyUser(token);
+        messageBean.markAsRead(receiver, senderUsername);
+        return Response.ok("{\"message\":\"Mensagens marcadas como lidas\"}").build();
     }
 }

@@ -1,6 +1,9 @@
 package aor.paj.projecto5.websocket;
 
+import aor.paj.projecto5.bean.TokenBean;
+import aor.paj.projecto5.entity.UserEntity;
 import jakarta.ejb.Singleton;
+import jakarta.inject.Inject;
 import jakarta.websocket.*;
 import jakarta.websocket.server.PathParam;
 import jakarta.websocket.server.ServerEndpoint;
@@ -11,72 +14,101 @@ import java.io.IOException;
 import java.util.HashMap;
 
 /**
- * Gestor central de comunicações WebSocket para o sistema de chat.
+ * Gestor central de comunicações WebSocket para o sistema de chat e notificações.
  * Esta classe funciona como um Singleton para garantir que todas as sessões
- * de utilizadores ativos sejam armazenadas e geridas num mapa único.
- * * O endpoint está configurado para capturar o token de autenticação diretamente no URL.
+ * de utilizadores ativos sejam armazenadas e geridas num mapa único em memória.
+ * * O endpoint utiliza um token para autenticação inicial, mas mapeia as sessões
+ * internamente através do ID único do utilizador para garantir a persistência
+ * da comunicação mesmo com a renovação de tokens.
  */
 @Singleton
 @ServerEndpoint("/websocket/chat/{token}")
 public class ChatEndpoint {
-
     private static final Logger logger = LogManager.getLogger(ChatEndpoint.class);
-    //teste
-    // Mapa para associar tokens de sessão às ligações WebSocket ativas
-    private HashMap<String, Session> sessions = new HashMap<>();
+
+    /** Bean injetado para validar o token e recuperar a identidade do utilizador. */
+    @Inject
+    private TokenBean tokenBean;
+
+    /** * Mapa que associa o identificador único do utilizador (userId) à sua sessão WebSocket ativa.
+     * Permite o endereçamento direto de mensagens sem necessidade de consultar tokens.
+     */
+    private HashMap<Long, Session> sessions = new HashMap<>();
+
 
     /**
-     * Envia uma mensagem de texto para um utilizador específico através do seu token.
-     * Se a sessão não for encontrada ou ocorrer um erro no envio, a sessão é removida.
-     * * @param token O identificador único do utilizador destino.
-     * @param msg O conteúdo da mensagem a enviar.
+     * Envia uma mensagem de texto para um utilizador específico através do seu identificador de sistema (userId).
+     * Se a sessão não for encontrada ou ocorrer um erro de I/O, a ligação é considerada
+     * inválida e removida do mapa.
+     * * @param userId O ID único do utilizador destinatário.
+     * @param msg O conteúdo da mensagem (normalmente um JSON) a ser enviado.
      */
-    public void send(String token, String msg) {
-        Session session = sessions.get(token);
+    public void send(Long userId, String msg) {
+        Session session = sessions.get(userId);
 
         if (session != null) {
             try {
                 session.getBasicRemote().sendText(msg);
-                logger.debug("Mensagem enviada com sucesso para o token: {}", token);
+                logger.debug("Mensagem enviada com sucesso para o ID: {}", userId);
             } catch (IOException e) {
-                logger.error("Falha ao enviar mensagem para o token {}. A remover sessão: {}", token, e.getMessage());
-                sessions.remove(token);
+                logger.error("Falha ao enviar mensagem para o utilizador {}. A remover sessão: {}", userId, e.getMessage());
+                sessions.remove(userId);
             }
         } else {
-            logger.warn("Tentativa de envio para um utilizador que não está ligado. Token: {}", token);
+            logger.warn("Tentativa de envio para um utilizador que não está ligado. ID: {}", userId);
         }
     }
 
     /**
-     * Evento disparado quando um cliente estabelece uma nova ligação.
-     * Adiciono o utilizador ao meu mapa de sessões ativo.
-     * * @param session A instância da ligação WebSocket.
-     * @param token O token capturado na path da ligação.
+     * Evento disparado no estabelecimento de uma nova ligação.
+     * Realiza o 'handshake' de segurança validando o token e, em caso de sucesso,
+     * regista a sessão no mapa utilizando o ID do utilizador.
+     * * @param session A instância da ligação WebSocket criada.
+     * @param token O token de autenticação capturado no path da URL.
      */
     @OnOpen
     public void onOpen(Session session, @PathParam("token") String token) {
-        sessions.put(token, session);
-        logger.info("Nova ligação WebSocket estabelecida para o utilizador com token: {}", token);
+        // Recupera a entidade do utilizador através do token de segurança para validar a ligação
+        UserEntity user = tokenBean.getUserEntityByToken(token);
+
+        if (user != null) {
+            // Regista a sessão usando o ID único do utilizador como chave primária de endereçamento
+            sessions.put(user.getId(), session);
+            logger.info("WebSocket: Sessão registada para o Utilizador ID: {}", user.getId());
+        } else {
+            // Bloqueio de segurança: Se o token for inválido, encerra a ligação imediatamente
+            try {
+                session.close(new CloseReason(CloseReason.CloseCodes.VIOLATED_POLICY, "Token Inválido"));
+                logger.warn("WebSocket: Tentativa de ligação com token inválido.");
+            } catch (IOException e) {
+                logger.error("Erro ao encerrar sessão não autorizada: {}", e.getMessage());
+            }
+        }
     }
 
     /**
-     * Evento disparado quando uma ligação é fechada (pelo cliente ou servidor).
-     * Garanto que o token é removido do mapa para limpar a memória.
+     * Evento disparado quando uma ligação é encerrada, seja por iniciativa do cliente,
+     * erro de rede ou encerramento do servidor. Garante a limpeza do mapa de sessões.
      * * @param session A sessão que está a ser encerrada.
-     * @param reason O motivo do fecho da ligação.
-     * @param token O token do utilizador que se desligou.
+     * @param reason O motivo técnico do encerramento.
+     * @param token O token utilizado na abertura (usado aqui para identificar o utilizador a remover).
      */
     @OnClose
     public void onClose(Session session, CloseReason reason, @PathParam("token") String token) {
-        sessions.remove(token);
-        logger.info("Ligação WebSocket terminada para o utilizador {}. Motivo: {}", token, reason.getReasonPhrase());
+
+        UserEntity user = tokenBean.getUserEntityByToken(token);
+        if (user != null) {
+            sessions.remove(user.getId());
+            logger.info("Ligação WebSocket terminada para o utilizador {}. Motivo: {}", user.getId(), reason.getReasonPhrase());
+        }
     }
 
     /**
-     * Lida com mensagens recebidas diretamente pelo canal WebSocket.
-     * Nota: O envio principal de mensagens de chat deve ser feito via REST (POST).
-     * * @param message O texto recebido.
-     * @param session A sessão que enviou a mensagem.
+     * Lida com mensagens de texto recebidas pelo canal WebSocket.
+     * Embora o fluxo principal de mensagens do projeto utilize a API REST, este método
+     * permite interações rápidas ou confirmações de receção.
+     * * @param message O conteúdo de texto recebido do cliente.
+     * @param session A sessão que originou o envio.
      */
     @OnMessage
     public void onMessage(String message, Session session) {
@@ -89,9 +121,9 @@ public class ChatEndpoint {
     }
 
     /**
-     * Captura erros inesperados que ocorram durante a comunicação.
-     * * @param session A sessão onde o erro ocorreu.
-     * @param error A exceção lançada.
+     * Captura e regista erros inesperados durante a transmissão de dados no canal.
+     * * @param session A sessão onde a exceção ocorreu.
+     * @param error O erro ou exceção lançada.
      */
     @OnError
     public void onError(Session session, Throwable error) {

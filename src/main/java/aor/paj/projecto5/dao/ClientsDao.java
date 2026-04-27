@@ -8,6 +8,11 @@ import jakarta.ejb.Stateless;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
 
+/**
+ * O meu gestor de persistência para Clientes. 
+ * É aqui que defino as regras de negócio ao nível da Base de Dados, como os filtros 
+ * de pesquisa e a validação de emails duplicados.
+ */
 @Stateless
 public class ClientsDao extends AbstractDao<ClientsEntity> {
 
@@ -16,9 +21,8 @@ public class ClientsDao extends AbstractDao<ClientsEntity> {
     }
 
     /**
-     * PESQUISA DINÂMICA
-     * @param ownerId ID do proprietário (opcional para Admin)
-     * @param softDelete null para ignorar, true para lixeira, false para ativos
+     * O meu filtro dinâmico de clientes. 
+     * Consegue separar os ativos dos apagados e filtrar por dono, tudo numa só função.
      */
     public List<ClientsEntity> findClientsWithFilters(Long ownerId, Boolean softDelete) {
         StringBuilder sb = new StringBuilder("SELECT c FROM ClientsEntity c WHERE 1=1");
@@ -42,7 +46,8 @@ public class ClientsDao extends AbstractDao<ClientsEntity> {
     }
 
     /**
-     * ATUALIZAÇÃO EM MASSA (Substitui softDeleteAllFromUser e restoreAllFromUser)
+     * Atualização em massa! 
+     * Útil quando quero desativar todos os clientes de um vendedor que saiu da empresa.
      */
     public int bulkUpdateSoftDelete(Long userId, boolean newStatus) {
       return  em.createQuery("UPDATE ClientsEntity c SET c.softDelete = :newStatus WHERE c.owner.id = :userId")
@@ -61,7 +66,7 @@ public class ClientsDao extends AbstractDao<ClientsEntity> {
     }
 
     /**
-     * Validação de duplicados
+     * Uma proteção extra: não deixo o mesmo vendedor registar dois clientes com o mesmo email.
      */
     public boolean isEmailDuplicated(String email, UserEntity owner) {
         try {

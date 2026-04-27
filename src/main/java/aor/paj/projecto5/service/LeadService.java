@@ -25,8 +25,9 @@ public class LeadService {
 
 
     /**
-     * Adicionar um lead ao utilizador autenticado.
-     * O uso de @Valid garante que campos vazios sejam travados pelo ValidationExceptionMapper.
+     * Onde o utilizador cria as suas oportunidades (Leads).
+     * Decidi usar a anotação @Valid aqui para que, se o React me mandar uma Lead 
+     * sem título, o Java bloqueie logo o pedido sem dar erro de Base de Dados.
      */
     @POST
     @Path("/")
@@ -44,8 +45,9 @@ public class LeadService {
     }
 
     /**
-     * Devolve a lista de leads associada ao utilizador autenticado.
-     * Utilizado tanto pela página de gestão de leads como pelo Dashboard para contagens.
+     * O endpoint que alimenta o Kanban e o Dashboard.
+     * Eu pus isto dinâmico: o Frontend pode mandar ?softDeleted=true no URL se 
+     * quiser ver a lixeira, ou enviar a flag 'state' se quiser só as leads "Ganhas".
      */
     @GET
     @Path("/")
@@ -74,8 +76,9 @@ public class LeadService {
     }
 
     /**
-     * Obter uma lead específica pelo ID.
-     * O verifier garante: Token válido, User ativo, Existência da lead e Posse/Admin.
+     * Buscar os detalhes de uma lead específica.
+     * A magia disto está no 'verifyLeadOwnership': ele garante que um utilizador normal 
+     * não consegue espiar a lead do seu colega do lado. Segurança primeiro!
      */
     @GET
     @Path("/{leadId:[0-9]+}") // Retiramos o /me para padronizar com /clients
@@ -114,7 +117,8 @@ public class LeadService {
 
 
     /**
-     * U7 Soft Delete de Lead usando o verbo DELETE.
+     * Soft Delete de uma Lead. O utilizador acha que apagou, mas na verdade 
+     * a lead só vai para a lixeira.
      */
     @DELETE
     @Path("/{leadId}") // URL limpa e profissional
@@ -176,8 +180,9 @@ public class LeadService {
 
 
     /**
-     * Super Put Admin: Edita qualquer lead do sistema,
-     * inclusive para fazer "Undelete"Edita qualquer lead do sistema, inclusive para fazer "Undelete"
+     * A "chave-mestra" dos Admins.
+     * Edita qualquer lead, de qualquer pessoa. Eu uso isto inclusivamente para 
+     * o Admin tirar leads da lixeira ou mudar o dono delas.
      */
     @PUT
     @Path("/admin/{leadId}")
@@ -221,8 +226,8 @@ public class LeadService {
 
 
     /**
-     * Hard Delete: Remove permanentemente a lead da base de dados.
-     * Apenas acessível por Administradores.
+     * O verdadeiro DELETE. 
+     * Quando o Admin clica nisto, a lead desaparece mesmo do PostgreSQL. Sem retorno.
      */
     @DELETE
     @Path("/admin/{leadId}")

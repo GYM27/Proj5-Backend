@@ -35,7 +35,7 @@ public class UserBaseDTO {
     private String lastName;
 
     @NotBlank(message = "O número de contacto não pode estar vazio.")
-    @Pattern(regexp = "^(\\+\\d{1,3}( )?)?\\d{3,15}$", message = "O número introduzido não é um contacto válido")
+    @Pattern(regexp = "^[\\d\\s\\+\\-()]*$", message = "O número introduzido não é um contacto válido")
     private String cellphone;
 
     @URL(message = "O link da foto deve ser um URL válido")

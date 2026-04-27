@@ -10,6 +10,9 @@ import jakarta.ws.rs.core.Response;
 import java.io.Serial;
 import java.io.Serializable;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Bean responsável pela lógica de autenticação e gestão de sessão (Stateless).
  * Alterado para @RequestScoped para seguir as boas práticas de APIs REST.
@@ -18,6 +21,8 @@ import java.io.Serializable;
 public class LoginBean implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
+
+    private static final Logger logger = LogManager.getLogger(LoginBean.class);
 
     @Inject
     private UsersBean usersBean;
@@ -38,6 +43,7 @@ public class LoginBean implements Serializable {
         LoginResponseDTO response = usersBean.authenticateUser(loginDTO);
 
         if (response == null) {
+            logger.warn("Tentativa de login falhada para o utilizador: " + loginDTO.getUsername());
             // Lançamos a exceção aqui. O GenericExceptionMapper tratará de enviar o JSON ao React.
             throw new WebApplicationException(
                     "Credenciais inválidas ou conta desativada.",
@@ -45,6 +51,7 @@ public class LoginBean implements Serializable {
             );
         }
 
+        logger.info("Utilizador autenticado com sucesso: " + loginDTO.getUsername() + " (Perfil: " + response.getUserRole() + ")");
         return response;
     }
 
@@ -59,6 +66,10 @@ public class LoginBean implements Serializable {
         }
 
         // Invalida o token no TokenBean -> TokenDao
-        return tokenBean.invalidateToken(token);
+        boolean success = tokenBean.invalidateToken(token);
+        if (success) {
+            logger.info("Sessão encerrada com sucesso (Token invalidado: " + token + ")");
+        }
+        return success;
     }
 }

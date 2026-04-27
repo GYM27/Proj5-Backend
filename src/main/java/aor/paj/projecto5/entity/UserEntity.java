@@ -44,7 +44,7 @@ public class UserEntity implements Serializable {
     @Column(name="contact", nullable = false, unique = true, updatable = true)
     private String contact;
 
-    @Column(name="photo", nullable = true, unique = false, updatable = true)
+    @Column(name="photo", nullable = true, unique = false, updatable = true, length = 1024)
     private String photo;
 
     @Enumerated(EnumType.STRING)

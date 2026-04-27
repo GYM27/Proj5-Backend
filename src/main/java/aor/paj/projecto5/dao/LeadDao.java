@@ -11,6 +11,10 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * O motor de busca das minhas Leads. 
+ * Aqui é onde o JPA brilha, convertendo as minhas queries em SQL para o PostgreSQL.
+ */
 @Stateless
 public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
 
@@ -34,8 +38,9 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * 1. SUPER GET (Pesquisa Dinâmica)
-     * Centraliza todas as listagens do Admin com filtros opcionais.
+     * O meu "Super Filtro". 
+     * Como o Admin precisa de filtrar por tudo e mais alguma coisa, criei esta query dinâmica 
+     * usando um StringBuilder para ir acrescentando as condições conforme o que o React manda.
      */
     public List<LeadEntity> findLeadsWithFilters(Integer stateId, Long userId, Boolean softDeleted) {
         StringBuilder sb = new StringBuilder("SELECT l FROM LeadEntity l WHERE 1=1");
@@ -67,8 +72,8 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * 2. BULK UPDATE (Ação em Massa)
-     * Altera o estado de softDelete de todas as leads de um user numa única transação.
+     * Alterar o estado de várias leads ao mesmo tempo. 
+     * É o que chamo de "Update Atómico" - uma só viagem à base de dados para mudar tudo.
      */
     public int bulkUpdateSoftDelete(Long userId, boolean newStatus) {
         return em.createQuery("UPDATE LeadEntity l SET l.softDeleted = :newStatus " +
@@ -100,7 +105,8 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * Elimina fisicamente todas as leads de um utilizador que estejam na lixeira
+     * A limpeza final. 
+     * Vou à tabela de leads e apago permanentemente tudo o que este user tinha na lixeira.
      */
     public int emptyTrashByUserId(Long userId) {
         // JPQL para apagar as leads onde o owner é o utilizador e estão marcadas como softDeleted

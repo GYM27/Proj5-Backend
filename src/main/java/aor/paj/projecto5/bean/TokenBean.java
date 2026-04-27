@@ -13,6 +13,12 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import static aor.paj.projecto5.utils.UserState.DISABLED;
 
+/**
+ * A minha classe de segurança principal! É aqui que controlo as sessões (Tokens).
+ * Uso UUIDs para garantir que os tokens são únicos e indecifráveis.
+ * A beleza disto é que os tokens têm um tempo de vida (ex: 8 horas) que eu defini
+ * na própria entidade (TokenEntity) usando anotações da Base de Dados.
+ */
 @Stateless
 public class TokenBean implements Serializable {
     @Serial
@@ -22,7 +28,9 @@ public class TokenBean implements Serializable {
     TokenDao tokenDao;
 
     /**
-     * Gera um novo token. A validade (8h) e datas são tratadas pelo @PrePersist da Entity.
+     * Quando um utilizador faz login e acerta a password, chamo esta função.
+     * Ela cria uma "chave de acesso" (Token) que o Frontend vai guardar no navegador
+     * e enviar a cada pedido. O prazo de expiração é calculado automaticamente pelo Hibernate!
      */
     public String generateNewToken(UserEntity owner) {
         String randomValue = UUID.randomUUID().toString();
@@ -35,7 +43,8 @@ public class TokenBean implements Serializable {
     }
 
     /**
-     * Valida se o token existe, está ativo e dentro do prazo de expiração.
+     * O guarda-costas da minha API! Antes de qualquer Endpoint de dados fazer alguma coisa,
+     * tem de perguntar a esta função se a "chave de acesso" ainda é válida.
      */
     public boolean isTokenValid(String tokenValue) {
         if (tokenValue == null || tokenValue.isEmpty()) return false;
@@ -78,9 +87,9 @@ public class TokenBean implements Serializable {
     }
 
     /**
-     * Procura o valor do token ativo de um utilizador específico.
-     * Este método é crucial para o MessageBean saber se o destinatário está "online"
-     * e para que canal WebSocket deve enviar a mensagem.
+     * O truque que inventei para os WebSockets!
+     * Para saber se um utilizador está "online" no chat e para qual canal devo mandar a mensagem,
+     * venho aqui confirmar se ele tem algum Token ativo na base de dados neste momento.
      */
     public String getActiveTokenValueByUser(UserEntity receiver) {
         // 1. Peço ao DAO para procurar o token ativo associado a este UserEntity

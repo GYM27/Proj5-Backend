@@ -14,17 +14,20 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
- * Enterprise JavaBean (EJB) Stateless responsável pela lógica de negócio
- * associada à gestão de Leads (Oportunidades).
- * Centraliza as operações de conversão (DTO <-> Entidade), regras de negócio
- * para utilizadores normais e operações avançadas para administradores.
+ * O meu EJB principal para gerir as Leads (Oportunidades de negócio).
+ * Centralizei aqui todas as regras, desde a criação básica pelo vendedor até 
+ * às operações de "Hard Delete" e "Esvaziar Lixeira" que só o Administrador pode fazer.
  */
 @Stateless
 public class LeadsBean implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
+
+    private static final Logger logger = LogManager.getLogger(LeadsBean.class);
 
     @Inject
     LeadDao leadDao;
@@ -40,11 +43,12 @@ public class LeadsBean implements Serializable {
     // =================================================================================
 
     /**
-     * Converte uma entidade LeadEntity num LeadDTO para envio ao Frontend.
-     * Mapeia os dados do dono (owner) caso a lead esteja associada a um utilizador.
+     * Auxiliar para converter a LeadEntity que vem da Base de Dados num DTO limpo 
+     * para enviar para o React. Tive o cuidado de extrair apenas o nome do "Owner" 
+     * (dono da lead) em vez de enviar o objeto User inteiro, para não sobrecarregar o JSON.
      *
-     * @param entity A entidade vinda da base de dados.
-     * @return O DTO populado ou null caso a entidade seja nula.
+     * @param entity A lead tal como está na BD.
+     * @return O DTO pronto a ser enviado pela API.
      */
     public LeadDTO entityToDTO(LeadEntity entity) {
         if (entity == null) return null;
@@ -53,17 +57,23 @@ public class LeadsBean implements Serializable {
         dto.setTitle(entity.getTitulo());
         dto.setDescription(entity.getDescricao());
         dto.setState(entity.getLeadState().getStateId());
-        dto.setDate(entity.getData());
+        if (entity.getData() != null) {
+            dto.setDate(entity.getData().toString());
+        }
         dto.setSoftDeleted(entity.isSoftDeleted());
 
-        // Aceder aos dados através do Owner
+        // Aceder aos dados do Owner de forma segura
         if (entity.getOwner() != null) {
+            // Extraímos apenas as Strings. Isto evita que o Jackson tente
+            // serializar o objeto UserEntity completo.
+            String firstName = entity.getOwner().getFirstName();
+            String lastName = entity.getOwner().getLastName();
 
-            dto.setName(entity.getOwner().getFirstName() + " " + entity.getOwner().getLastName());
-
-            dto.setFirstName(entity.getOwner().getFirstName());
-            dto.setLastName(entity.getOwner().getLastName());
+            dto.setFirstName(firstName);
+            dto.setLastName(lastName);
+            dto.setName(firstName + " " + lastName);
         }
+
         return dto;
     }
 
@@ -84,8 +94,7 @@ public class LeadsBean implements Serializable {
         return entity;
     }
 
-    /**
-     * Converte uma lista de Entidades numa lista de DTOs.
+    /**     * Converte uma lista de Entidades numa lista de DTOs.
      *
      * @param entities Lista de LeadEntity.
      * @return Lista de LeadDTO correspondente.
@@ -113,17 +122,20 @@ public class LeadsBean implements Serializable {
         LeadEntity newLead = DTOToEntity(dto, owner);
 
         leadDao.persist(newLead);
+        
+        logger.info("Lead '" + newLead.getTitulo() + "' (ID: " + newLead.getId() + ") criada com sucesso pelo utilizador: " + owner.getUsername() + " (Token: " + token + ")");
 
         return entityToDTO(newLead);
     }
 
     /**
-     * Lista as leads pertencentes ao utilizador autenticado.
-     * Permite alternar entre leads ativas e leads na lixeira.
+     * O método que alimenta o meu Kanban no Frontend!
+     * Pega no token do utilizador, descobre quem ele é, e vai buscar as leads dele.
+     * Tem um truque: se o React pedir 'softDeleted=true', devolvo as leads da lixeira.
      *
-     * @param token Token de sessão do utilizador.
-     * @param softDeleted Define se a query deve buscar as leads apagadas (true) ou ativas (false).
-     * @return Lista de leads formatadas em DTO.
+     * @param token O token de sessão.
+     * @param softDeleted Quero as leads ativas (false) ou as apagadas (true)?
+     * @return A lista de leads pronta para o Kanban.
      */
     public List<LeadDTO> getLeadsByToken(String token, Boolean softDeleted) {
         UserEntity user = tokenBean.getUserEntityByToken(token);
@@ -170,20 +182,25 @@ public class LeadsBean implements Serializable {
         lead.setLeadState(dto.getStateEnum());
 
         leadDao.merge(lead);
+        
+        logger.info("Lead (ID: " + leadId + ") foi editada. Novo Título: '" + dto.getTitle() + "', Estado: " + dto.getStateEnum());
 
         return entityToDTO(lead);
     }
 
     /**
-     * Move uma lead para a lixeira (Eliminação lógica).
+     * Quando o utilizador clica em apagar no Frontend, eu não apago logo da BD!
+     * Apenas mudo a flag 'softDeleted' para true, enviando a lead para a "Lixeira".
+     * Assim, se foi um erro, o Administrador pode sempre recuperar.
      *
-     * @param leadId O identificador único da lead a desativar.
+     * @param leadId O ID da lead a "apagar".
      */
     public void softDeleteLead(Long leadId) {
         LeadEntity lead = leadDao.getLeadByLeadID(leadId);
         if (lead != null) {
             lead.setSoftDeleted(true);
             leadDao.merge(lead);
+            logger.info("Lead (ID: " + leadId + ") foi eliminada logicamente (movida para o lixo).");
         }
     }
 
@@ -283,10 +300,11 @@ public class LeadsBean implements Serializable {
     }
 
     /**
-     * Remove permanentemente (Hard Delete) uma lead da base de dados.
+     * Operação perigosa reservada ao Admin: Hard Delete!
+     * Aqui sim, a lead é removida permanentemente e fisicamente da tabela PostgreSQL.
      *
-     * @param leadId ID da lead a remover.
-     * @throws WebApplicationException 404 se a lead não existir.
+     * @param leadId O ID da lead a destruir.
+     * @throws WebApplicationException 404 se a lead já não existir.
      */
     public void hardDeleteLead(Long leadId) {
         LeadEntity lead = leadDao.getLeadByLeadID(leadId);

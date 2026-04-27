@@ -11,10 +11,15 @@ import jakarta.ws.rs.core.Response;
 import aor.paj.projecto5.bean.UsersBean;
 import aor.paj.projecto5.dto.UserBaseDTO;
 import aor.paj.projecto5.dto.UserDTO;
+import aor.paj.projecto5.dto.UserUpdateDTO;
+import aor.paj.projecto5.entity.UserEntity;
+import aor.paj.projecto5.utils.UserRoles;
 import java.util.List;
 
 /**
- * Serviço unificado para gestão de Utilizadores (Perfil e Administração).
+ * A minha porta de entrada principal (Endpoint REST) para tudo o que tem a ver com Utilizadores.
+ * É aqui que o Frontend (React) bate à porta. Como vês, uso anotações do JAX-RS (@Path, @GET, @POST)
+ * para rotear os pedidos para os Beans corretos.
  */
 @Path("/users")
 public class UserService {
@@ -30,8 +35,9 @@ public class UserService {
     // =========================================================================
 
     /**
-     * PASSO 1 (ADMIN): Envia um convite de registo para um novo email.
-     * Apenas Administradores podem aceder a este endpoint.
+     * PASSO 1 (ADMIN): Enviar Convites.
+     * Criei este endpoint fechado a sete chaves: só os Administradores podem entrar aqui 
+     * (garantido pelo verifier.verifyAdmin). Ele recebe um email e dispara o fluxo de pré-registo.
      * URL: POST /users/invite
      */
     @POST
@@ -50,8 +56,9 @@ public class UserService {
     }
 
     /**
-     * Conclui o registo usando o token recebido por email.
-     * Endpoint público (não exige verifier).
+     * PASSO 2: Concluir Registo.
+     * Este endpoint é público porque a pessoa que recebeu o email ainda não tem conta.
+     * O segredo está no token que vem no URL (?token=...). Sem ele, não entra.
      * URL: POST /users/register?token=123-abc-456
      */
     @POST
@@ -74,7 +81,8 @@ public class UserService {
     }
 
     /**
-     * Retorna o perfil completo do próprio utilizador (via token).
+     * Devolve os dados da pessoa que está logada.
+     * O frontend nem precisa de enviar o ID, basta mandar o token no Header e eu descubro quem é.
      * URL: GET /users/me
      */
     @GET
@@ -90,17 +98,19 @@ public class UserService {
     }
 
     /**
-     * Edita o perfil do próprio utilizador (via token).
+     * Grava as edições que o utilizador fez ao seu próprio perfil.
+     * Criei o UserUpdateDTO para garantir que ele não tenta enviar um 'role' ou 'state' falso para se promover a Admin.
      * URL: PUT /users/me
      */
     @PUT
     @Path("/me")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response putEditMyProfile(@HeaderParam("token") String token, @Valid UserDTO userDTO) {
+    public Response putEditMyProfile(@HeaderParam("token") String token, @Valid UserUpdateDTO userDTO) {
         verifier.verifyUser(token);
         usersBean.putEditOwnUser(token, userDTO);
-        return Response.ok(userDTO).build();
+        
+        return Response.ok("{\"message\":\"Perfil atualizado com sucesso\"}").build();
     }
 
 
@@ -115,8 +125,20 @@ public class UserService {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAllUsers(@HeaderParam("token") String token) {
-        verifier.verifyAdmin(token);
-        List<UserBaseDTO> users = usersBean.getAllUsers();
+        // 1. Validação básica: Utilizador tem de estar autenticado e ATIVO
+        UserEntity requester = verifier.verifyUser(token);
+
+        List<UserBaseDTO> users;
+        
+        // 2. Lógica de visibilidade:
+        // Se for Admin, vê tudo (para gestão). 
+        // Se for utilizador comum, vê apenas os colegas ativos (para o chat).
+        if (requester.getUserRole() == UserRoles.ADMIN) {
+            users = usersBean.getAllUsers();
+        } else {
+            users = usersBean.getAllActiveUsers();
+        }
+        
         return Response.ok(users).build();
     }
 
@@ -203,7 +225,9 @@ public class UserService {
 
 
     /**
-     * Endpoint para solicitar a recuperação de password.
+     * O utilizador clica em "Recuperar Password" e cai aqui.
+     * Por questões de segurança, eu devolvo SEMPRE "Ok" (mesmo que o email não exista).
+     * Assim previno ataques de enumeração (hackers não conseguem saber quem está registado).
      * URL: POST /users/forgot-password
      */
     @POST

@@ -22,11 +22,10 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 /**
- * SERVIÇO REST: ClientsService
- * ----------------------------
- * DESCRIÇÃO: Controlador JAX-RS responsável pela gestão de clientes.
- * ARQUITETURA: Atua como a camada de apresentação da API, recebendo os pedidos HTTP,
- * delegando a segurança ao 'verifier' e a lógica de negócio ao 'ClientsBean'.
+ * O meu "balcão de atendimento" para tudo o que envolve Clientes.
+ * É aqui que defino as rotas (/clients) que o React vai chamar.
+ * Repara como uso o 'verifier' em quase todos os métodos para garantir 
+ * que ninguém mexe onde não deve.
  */
 @Path("/clients")
 public class ClientsService {
@@ -42,8 +41,9 @@ public class ClientsService {
     // =========================================================================
 
     /**
-     * CRIAÇÃO DE CLIENTE (RESTful POST)
-     * O uso de @Valid garante que a validação do DTO ocorra antes de atingir o Bean.
+     * Criar um novo cliente.
+     * Usei o @Valid para o Java validar automaticamente campos como o email ou nome 
+     * antes de sequer tentar chegar à base de dados.
      */
     @POST
     @Path("/")
@@ -60,8 +60,9 @@ public class ClientsService {
     }
 
     /**
-     * LISTAGEM DINÂMICA (POLIMORFISMO DE DADOS)
-     * O comentário indica que o Bean decide internamente o que devolver com base no token.
+     * Listagem de clientes. 
+     * Fiz isto de forma inteligente: o mesmo endpoint serve para o Admin ver tudo 
+     * ou para o vendedor ver só os seus, dependendo do token e do parâmetro userId.
      */
     @GET
     @Path("/")
@@ -90,24 +91,21 @@ public class ClientsService {
         // tem permissão para editar este recurso específico (é o Dono ou é Admin).
         verifier.verifyOwnershipOrAdmin(token, clientId);
 
-        ClientsDTO updatedClient = clientsBean.editClient(clientId, clientDto);
+        ClientsDTO updatedClient = clientsBean.editClient(token, clientId, clientDto);
         return Response.ok(updatedClient).build();
     }
 
     /**
-     * SOFT DELETE DE CLIENTE (Lixeira)
-     * -------------------------------------------------------------------------
-     * CORREÇÃO DE ROTEAMENTO: A adição de `:[0-9]+` garante que o servidor JAX-RS
-     * este endpoint só aceita números, evitando colisões com rotas
-     * estáticas como "/me-trash" ou "/trash".
+     * Mandar um cliente para a lixeira (Soft Delete).
+     * Repara na Regex `:[0-9]+` no Path - isto impede que o Java se confunda 
+     * com outras rotas que tenham nomes em vez de IDs.
      */
     @DELETE
     @Path("/{id:[0-9]+}")
     public Response softDelete(@HeaderParam("token") String token, @PathParam("id") Long id) {
         // SEGURANÇA (RBAC): Valida se o utilizador é o dono do registo ou um Administrador
         verifier.verifyOwnershipOrAdmin(token, id);
-
-        clientsBean.softDeleteClient(id);
+        clientsBean.softDeleteClient(token, id);
 
         // BOAS PRÁTICAS REST: 204 No Content indica sucesso numa operação de eliminação
         return Response.noContent().build();
@@ -127,7 +125,7 @@ public class ClientsService {
         verifier.verifyOwnershipOrAdmin(token, id);
 
         // Guarda o DTO retornado pelo Bean após a alteração de estado
-        ClientsDTO restoredClient = clientsBean.restoreClient(id);
+        ClientsDTO restoredClient = clientsBean.restoreClient(token, id);
 
         // Retorna o objeto completo para que o Frontend possa atualizar a UI sem fazer novos pedidos
         return Response.ok(restoredClient).build();
@@ -157,10 +155,8 @@ public class ClientsService {
     // =========================================================================
 
     /**
-     * HARD DELETE (Remoção Física)
-     * -------------------------------------------------------------------------
-     * Exclusivo para operações de limpeza permanente da base de dados.
-     * Regex `:[0-9]+` isola o parâmetro dinâmico das rotas de sistema.
+     * Ação irreversível! 
+     * Apenas o Admin pode fazer isto para limpar mesmo o cliente da memória do PostgreSQL.
      */
     @DELETE
     @Path("/{id:[0-9]+}/permanent")
@@ -169,7 +165,7 @@ public class ClientsService {
         verifier.verifyAdmin(token);
 
         // 2. Chama o método de execução destrutiva no Bean
-        clientsBean.permanentDeleteClient(id);
+        clientsBean.permanentDeleteClient(token, id);
 
         // 3. Retorna 204 No Content
         return Response.noContent().build();

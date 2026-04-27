@@ -9,12 +9,23 @@ package aor.paj.projecto5.dto;
  */
 public class MessageDto {
 
-    private String receiver; // Username ou ID do destino
-    private String content; // O texto da mensagem
-    private long timestamp; // hora da mensagem
+    private String sender;   // Username do remetente
+    private String receiver; // Username do destino
+    private String content;  // O texto da mensagem
+    private long timestamp;  // hora da mensagem
+    private String type;     // Tipo da mensagem (ex: "CHAT")
+    private boolean read;    // Estado de leitura
 
     // Construtor vazio necessário para o Jackson (JSON)
     public MessageDto() {
+    }
+
+    public String getSender() {
+        return sender;
+    }
+
+    public void setSender(String sender) {
+        this.sender = sender;
     }
 
     /**
@@ -42,5 +53,21 @@ public class MessageDto {
 
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public boolean isRead() {
+        return read;
+    }
+
+    public void setRead(boolean read) {
+        this.read = read;
     }
 }

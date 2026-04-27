@@ -5,13 +5,19 @@ import aor.paj.projecto5.utils.UserRoles;
 public class LoginResponseDTO {
     private Long id;
     private String firstName;
+    private String lastName;
+    private String username;
+    private String email;
     private UserRoles userRole;
     private String token;
     private String photoUrl;
 
-    public LoginResponseDTO(Long id, String firstName, UserRoles userRole, String token,String photoUrl) {
+    public LoginResponseDTO(Long id, String firstName, String lastName, String username, String email, UserRoles userRole, String token, String photoUrl) {
         this.id = id;
         this.firstName = firstName;
+        this.lastName = lastName;
+        this.username = username;
+        this.email = email;
         this.userRole = userRole;
         this.token = token;
         this.photoUrl = photoUrl;
@@ -25,6 +31,30 @@ public class LoginResponseDTO {
 
     public String getFirstName() {
         return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public UserRoles getUserRole() {

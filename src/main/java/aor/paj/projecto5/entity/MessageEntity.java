@@ -34,6 +34,10 @@ public class MessageEntity implements Serializable {
     @Column(name = "sent_at", nullable = false)
     private Timestamp sentAt;
 
+    // Estado de leitura (true = lida, false = por ler)
+    @Column(name = "is_read", nullable = false)
+    private boolean isRead = false;
+
     /**
      * Construtor padrão exigido pelo JPA.
      */
@@ -78,5 +82,13 @@ public class MessageEntity implements Serializable {
 
     public void setSentAt(Timestamp sentAt) {
         this.sentAt = sentAt;
+    }
+
+    public boolean isRead() {
+        return isRead;
+    }
+
+    public void setRead(boolean read) {
+        isRead = read;
     }
 }

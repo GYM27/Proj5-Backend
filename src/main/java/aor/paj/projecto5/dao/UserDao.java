@@ -11,6 +11,11 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * O meu DAO para Utilizadores. 
+ * É aqui que escrevo as queries SQL (JPQL) e uso a Criteria API para falar com o PostgreSQL.
+ * Como herda de AbstractDao, já tenho o básico (find, persist, remove) feito.
+ */
 @Stateless
 public class UserDao extends AbstractDao<UserEntity> implements Serializable {
     @Serial
@@ -21,7 +26,9 @@ public class UserDao extends AbstractDao<UserEntity> implements Serializable {
     }
 
     /**
-     * Procura um utilizador através de um token ativo usando Criteria API.
+     * Esta query é complexa! 
+     * Ela vai à tabela de Tokens, vê qual é que está ativo, e traz-me o Utilizador (Owner) 
+     * que está pendurado nesse token. Uso Criteria API para ser mais robusto.
      */
     public UserEntity findUserByToken(String tokenValue) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -77,8 +84,9 @@ public class UserDao extends AbstractDao<UserEntity> implements Serializable {
     }
 
     /**
-     * Transfere em massa a posse de Leads e Clientes.
-     * É muito mais eficiente que fazer ciclos 'for' em Java.
+     * O truque da eficiência! 
+     * Em vez de andar a apagar leads uma a uma em Java, mando um comando UPDATE direto 
+     * para a Base de Dados. É instantâneo, mesmo que o user tenha 1000 leads.
      */
     public void transferOwnership(UserEntity oldOwner, UserEntity newOwner) {
         // Atualiza as Leads
@@ -111,8 +119,22 @@ public class UserDao extends AbstractDao<UserEntity> implements Serializable {
     }
 
     /**
-     * Remove fisicamente o utilizador da base de dados.
-     * A reatribuição de dados deve ser chamada no Bean ANTES deste método.
+     * Procura utilizadores por Role.
+     */
+    public List<UserEntity> findUsersByRole(aor.paj.projecto5.utils.UserRoles role) {
+        try {
+            return em.createQuery("SELECT u FROM UserEntity u WHERE u.userRole = :role", UserEntity.class)
+                    .setParameter("role", role)
+                    .getResultList();
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * O fim da linha para um utilizador. 
+     * Depois de o Bean garantir que os dados dele foram transferidos, eu removo 
+     * a linha da tabela permanentemente.
      */
     public boolean hardDelete(Long id) {
         UserEntity userEntity = em.find(UserEntity.class, id);
