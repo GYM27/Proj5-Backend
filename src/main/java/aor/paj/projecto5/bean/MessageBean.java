@@ -41,9 +41,7 @@ public class MessageBean {
         em.persist(message);
 
         // Só tentamos enviar se o user estiver online
-        // O método getActiveTokenValueByUser no TokenBean deve ser uma query indexada
         if (receiver != null) {
-            // Geramos o JSON de forma robusta usando a API do Jakarta
             String wsPayload = Json.createObjectBuilder()
                     .add("type", "CHAT")
                     .add("sender", sender.getUsername())
@@ -62,7 +60,6 @@ public class MessageBean {
      * Recupera todas as mensagens enviadas ou recebidas pelo utilizador.
      */
     public List<MessageDto> getHistory(UserEntity user) {
-        // Query para buscar mensagens trocadas pelo utilizador
         List<MessageEntity> entities = em.createQuery(
                 "SELECT m FROM MessageEntity m WHERE m.sender = :user OR m.receiver = :user ORDER BY m.sentAt ASC", 
                 MessageEntity.class)
@@ -83,13 +80,23 @@ public class MessageBean {
     }
 
     /**
+     * Recupera apenas as mensagens não lidas para o centro de notificações.
+     */
+    public List<MessageEntity> getUnreadMessages(UserEntity receiver) {
+        return em.createQuery(
+                "SELECT m FROM MessageEntity m WHERE m.receiver = :receiver AND m.isRead = false ORDER BY m.sentAt DESC", 
+                MessageEntity.class)
+                .setParameter("receiver", receiver)
+                .getResultList();
+    }
+
+    /**
      * Marca todas as mensagens recebidas de um remetente específico como lidas.
      */
     public void markAsRead(UserEntity receiver, String senderUsername) {
         UserEntity sender = userDao.findUserByUsername(senderUsername);
         if (sender == null) return;
 
-        // Atualizamos todas as mensagens não lidas deste remetente para este destinatário
         em.createQuery("UPDATE MessageEntity m SET m.isRead = true WHERE m.receiver = :receiver AND m.sender = :sender AND m.isRead = false")
                 .setParameter("receiver", receiver)
                 .setParameter("sender", sender)

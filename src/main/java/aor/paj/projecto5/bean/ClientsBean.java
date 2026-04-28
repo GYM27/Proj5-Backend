@@ -17,46 +17,29 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * O meu EJB que trata de tudo o que tem a ver com Clientes.
- * Ele funciona como a "ponte" entre o que o React me pede (REST) e o que a Base de Dados precisa (DAO).
+ * EJB para gestão de Clientes com Auditoria integrada.
  */
 @Stateless
 public class ClientsBean {
 
     private static final Logger logger = LogManager.getLogger(ClientsBean.class);
 
-    /**
-     * Bean responsável pela validação e extração de dados através de tokens de autenticação.
-     */
     @Inject
     TokenBean tokenBean;
 
-    /**
-     * Data Access Object (DAO) para operações na base de dados relacionadas com a entidade ClientsEntity.
-     */
     @Inject
     ClientsDao clientsDao;
 
-    /**
-     * Data Access Object (DAO) para operações na base de dados relacionadas com a entidade UserEntity.
-     */
     @Inject
     UserDao userDao;
 
-    /**
-     * Construtor padrão sem argumentos.
-     */
+    @Inject
+    AuditLogBean auditLogBean;
+
     public ClientsBean() {}
 
-    // --- MÉTODOS DE CONVERSÃO (Helpers) ---
+    // --- Helpers ---
 
-    /**
-     * Criei esta função para transformar a entidade (que vem da BD) num formato DTO leve 
-     * e seguro para enviar para o React. Assim escondo detalhes de implementação da base de dados.
-     *
-     * @param entity O cliente tal como está gravado.
-     * @return O DTO pronto a viajar pela rede.
-     */
     private ClientsDTO toDTO(ClientsEntity entity) {
         ClientsDTO dto = new ClientsDTO();
         dto.setId(entity.getId());
@@ -68,13 +51,6 @@ public class ClientsBean {
         return dto;
     }
 
-    /**
-     * Converte um objeto de transferência de dados (DTO) numa entidade da camada de persistência.
-     *
-     * @param dto O {@link ClientsDTO} contendo os dados do cliente.
-     * @param owner A entidade {@link UserEntity} que representa o proprietário (criador/responsável) pelo cliente.
-     * @return A entidade {@link ClientsEntity} preenchida.
-     */
     private ClientsEntity toEntity(ClientsDTO dto, UserEntity owner) {
         ClientsEntity entity = new ClientsEntity();
         entity.setName(dto.getName());
@@ -82,49 +58,25 @@ public class ClientsBean {
         entity.setPhone(dto.getPhone());
         entity.setOrganization(dto.getOrganization());
         entity.setOwner(owner);
-        // Use o valor do DTO se ele estiver disponível, caso contrário, use false
         entity.setSoftDelete(dto.isSoftDeleted());
         return entity;
     }
 
-    /**
-     * Converte uma lista de entidades {@link ClientsEntity} numa lista de {@link ClientsDTO}.
-     *
-     * @param entities A lista de entidades a converter.
-     * @return Uma lista de objetos DTO correspondentes.
-     */
     private List<ClientsDTO> toDTOList(List<ClientsEntity> entities) {
-        return entities.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        return entities.stream().map(this::toDTO).collect(Collectors.toList());
     }
 
-    // --- MÉTODOS DE ESCRITA (Individual) ---
+    // --- CRUD ---
 
-    /**
-     * Adiciona um novo cliente associado ao utilizador autenticado pelo token.
-     *
-     * @param token O token de autenticação do utilizador que está a criar o cliente.
-     * @param dto Os dados do novo cliente a ser criado.
-     * @return O {@link ClientsDTO} do cliente recém-criado persistido na base de dados.
-     */
     public ClientsDTO addClient(String token, ClientsDTO dto) {
         UserEntity owner = tokenBean.getUserEntityByToken(token);
         ClientsEntity newClient = toEntity(dto, owner);
         clientsDao.persist(newClient);
-        logger.info("Cliente '" + newClient.getName() + "' (ID: " + newClient.getId() + ") adicionado com sucesso pelo utilizador: " + owner.getUsername());
+        
+        auditLogBean.logAction(owner, "CREATE_CLIENT", "Adicionou o cliente: " + newClient.getName());
         return toDTO(newClient);
     }
 
-    /**
-     * Edita as informações de um cliente existente.
-     *
-     * @param token O token de quem está a editar.
-     * @param clientId O ID do cliente a ser atualizado.
-     * @param dto Os novos dados do cliente.
-     * @return O {@link ClientsDTO} atualizado.
-     * @throws WebApplicationException Se o cliente não existir ou se estiver na lixeira (soft deleted).
-     */
     public ClientsDTO editClient(String token, Long clientId, ClientsDTO dto) {
         UserEntity editor = tokenBean.getUserEntityByToken(token);
         ClientsEntity client = clientsDao.find(clientId);
@@ -137,22 +89,12 @@ public class ClientsBean {
         client.setEmail(dto.getEmail());
         client.setPhone(dto.getPhone());
         client.setOrganization(dto.getOrganization());
-        
         clientsDao.merge(client);
 
-        logger.info("Cliente (ID: " + clientId + ") atualizado com sucesso pelo utilizador: " + editor.getUsername());
-        
+        auditLogBean.logAction(editor, "UPDATE_CLIENT", "Editou o cliente: " + client.getName());
         return toDTO(client);
     }
 
-    /**
-     * O meu famoso "Soft Delete"! Quando o utilizador apaga um cliente, 
-     * eu não o destruo na Base de Dados. Apenas marco uma flag para dizer 
-     * que está na lixeira. Segurança em primeiro lugar!
-     *
-     * @param clientId Quem vou "apagar".
-     * @return O cliente com a flag atualizada.
-     */
     public ClientsDTO softDeleteClient(String token, Long clientId) {
         UserEntity user = tokenBean.getUserEntityByToken(token);
         ClientsEntity client = clientsDao.find(clientId);
@@ -161,164 +103,87 @@ public class ClientsBean {
         }
         client.setSoftDelete(true);
         clientsDao.merge(client);
-        logger.info("Cliente (ID: " + clientId + ") movido para o lixo pelo utilizador: " + user.getUsername());
+        
+        auditLogBean.logAction(user, "DELETE_CLIENT", "Moveu para a lixeira o cliente: " + client.getName());
         return toDTO(client);
     }
 
-    /**
-     * Restaura um cliente que estava na lixeira, voltando a marcá-lo como ativo.
-     *
-     * @param clientId O ID do cliente a ser restaurado.
-     * @return O {@link ClientsDTO} atualizado refletindo o estado ativo.
-     * @throws WebApplicationException Se o cliente não existir ou não estiver na lixeira.
-     */
     public ClientsDTO restoreClient(String token, Long clientId) {
         UserEntity user = tokenBean.getUserEntityByToken(token);
         ClientsEntity client = clientsDao.find(clientId);
         if (client == null || !client.isSoftDelete()) {
-            throw new WebApplicationException("Cliente não encontrado ou já ativo", Response.Status.NOT_FOUND);
+            throw new WebApplicationException("Cliente não encontrado", Response.Status.NOT_FOUND);
         }
         client.setSoftDelete(false);
         clientsDao.merge(client);
-        logger.info("Cliente (ID: " + clientId + ") restaurado do lixo pelo utilizador: " + user.getUsername());
+        
+        auditLogBean.logAction(user, "RESTORE_CLIENT", "Restaurou o cliente: " + client.getName());
         return toDTO(client);
     }
 
-    /**
-     * Remove permanentemente um cliente da base de dados.
-     * O cliente tem de estar obrigatoriamente na lixeira (softDelete = true) antes de ser removido.
-     *
-     * @param clientId O ID do cliente a ser removido fisicamente.
-     * @return O {@link ClientsDTO} contendo os dados do cliente apagado.
-     * @throws WebApplicationException Se o cliente não for encontrado ou não estiver marcado como soft delete.
-     */
     public ClientsDTO permanentDeleteClient(String token, Long clientId) {
         UserEntity user = tokenBean.getUserEntityByToken(token);
         ClientsEntity client = clientsDao.find(clientId);
         if (client == null || !client.isSoftDelete()) {
-            throw new WebApplicationException("O cliente deve estar na lixeira para remoção permanente", Response.Status.CONFLICT);
+            throw new WebApplicationException("O cliente deve estar na lixeira para remoção", Response.Status.CONFLICT);
         }
+        String clientName = client.getName();
         ClientsDTO dto = toDTO(client);
         clientsDao.remove(client);
-        logger.info("Cliente (ID: " + clientId + ") eliminado permanentemente pelo administrador: " + user.getUsername());
+        
+        auditLogBean.logAction(user, "HARD_DELETE_CLIENT", "Eliminou permanentemente o cliente: " + clientName);
         return dto;
     }
 
-    // --- MÉTODOS DE LISTAGEM DINÂMICA (Refatorados) ---
+    // --- Listagem e Bulk ---
 
-    /**
-     * O método que devolve a lista de clientes. Tem uma proteção forte:
-     * Se quem pedir for Admin, ele pode ver os clientes de quem quiser (basta passar o userId).
-     * Mas se for um vendedor normal, eu ignoro o userId que ele mandou e forço 
-     * a pesquisa a devolver APENAS os clientes dele. Segurança ao nível do Backend!
-     *
-     * @param token Quem está a pedir.
-     * @param userId De quem queremos ver os clientes (só resulta se for Admin).
-     * @return Lista filtrada de clientes ativos.
-     */
     public List<ClientsDTO> listClients(String token, Long userId) {
         UserEntity requester = tokenBean.getUserEntityByToken(token);
         if (requester == null) throw new WebApplicationException(401);
-
-        // Segurança: Apenas Admin pode escolher o userId; utilizador comum vê apenas os seus
         Long filterId = (requester.getUserRole() == UserRoles.ADMIN) ? userId : requester.getId();
-
         return toDTOList(clientsDao.findClientsWithFilters(filterId, false));
     }
 
-    /**
-     * Lista clientes que se encontram na lixeira (softDelete = true).
-     * Partilha a mesma lógica de segurança baseada em papéis do método listClients().
-     *
-     * @param token O token do utilizador que faz a requisição.
-     * @param userId Opcional. O ID do utilizador cuja lixeira se pretende consultar.
-     * @return Uma lista de {@link ClientsDTO} na lixeira.
-     * @throws WebApplicationException Se o token for inválido (HTTP 401).
-     */
     public List<ClientsDTO> listDeletedClientsDTO(String token, Long userId) {
         UserEntity requester = tokenBean.getUserEntityByToken(token);
         if (requester == null) throw new WebApplicationException(401);
-
         Long filterId = (requester.getUserRole() == UserRoles.ADMIN) ? userId : requester.getId();
-
         return toDTOList(clientsDao.findClientsWithFilters(filterId, true));
     }
 
-    // --- AÇÕES EM MASSA (Otimizadas via Bulk Update no DAO) ---
-
-    /**
-     * Move todos os clientes de um utilizador específico para a lixeira.
-     * Operação otimizada no lado da base de dados através do DAO.
-     *
-     * @param userId O ID do utilizador dono dos clientes a apagar.
-     * @return O número de registos alterados.
-     * @throws WebApplicationException Se o utilizador não for encontrado na base de dados.
-     */
     public int softDeleteAllClientsByUser(Long userId) {
-        if (userDao.find(userId) == null) throw new WebApplicationException("Utilizador não encontrado", 404);
-        return clientsDao.bulkUpdateSoftDelete(userId, true); // Move tudo para lixeira
+        if (userDao.find(userId) == null) throw new WebApplicationException("User not found", 404);
+        return clientsDao.bulkUpdateSoftDelete(userId, true);
     }
 
-    /**
-     * Restaura todos os clientes de um utilizador específico que estavam na lixeira.
-     *
-     * @param userId O ID do utilizador dono dos clientes a restaurar.
-     * @return O número de registos alterados.
-     * @throws WebApplicationException Se o utilizador não for encontrado na base de dados.
-     */
     public int unSoftDeleteAllClientsByUser(Long userId) {
-        if (userDao.find(userId) == null) throw new WebApplicationException("Utilizador não encontrado", 404);
-        return clientsDao.bulkUpdateSoftDelete(userId, false); // Restaura tudo
+        if (userDao.find(userId) == null) throw new WebApplicationException("User not found", 404);
+        return clientsDao.bulkUpdateSoftDelete(userId, false);
     }
 
-    /**
-     * Aqui é a ação de limpeza total! Vou à lixeira deste utilizador e aí sim, 
-     * removo fisicamente os clientes da base de dados.
-     *
-     * @param userId De quem é a lixeira que vou esvaziar.
-     * @return Deu certo (true) ou houve asneira (false).
-     */
     public boolean emptyTrash(Long userId) {
         try {
-            // Obtemos a lista da lixeira e removemos fisicamente
             List<ClientsEntity> trashList = clientsDao.findClientsWithFilters(userId, true);
             for (ClientsEntity c : trashList) {
                 clientsDao.remove(c);
             }
+            auditLogBean.logSystemAction("EMPTY_TRASH_CLIENTS", "Lixeira de clientes esvaziada para o user ID: " + userId);
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
-    // --- AUXILIARES E ADMIN ---
-
-    /**
-     * Método administrativo para a criação de um cliente e atribuição direta a um utilizador específico.
-     * Usado tipicamente quando um Administrador quer alocar um novo cliente a outro membro da equipa.
-     *
-     * @param userId O ID do utilizador que será o proprietário do cliente.
-     * @param dto Os dados do novo cliente a ser criado.
-     * @return O {@link ClientsDTO} do cliente recém-criado persistido na base de dados.
-     * @throws WebApplicationException Se o utilizador alvo não for encontrado.
-     */
     public ClientsDTO createClientForUser(Long userId, ClientsDTO dto) {
         UserEntity targetOwner = userDao.find(userId);
-        if (targetOwner == null) throw new WebApplicationException("Utilizador não encontrado", 404);
-
+        if (targetOwner == null) throw new WebApplicationException("User not found", 404);
         ClientsEntity newClient = toEntity(dto, targetOwner);
         clientsDao.persist(newClient);
+        auditLogBean.logSystemAction("ADMIN_CREATE_CLIENT", "Admin atribuiu cliente '" + newClient.getName() + "' ao user: " + targetOwner.getUsername());
         return toDTO(newClient);
     }
 
-    /**
-     * Recupera todos os clientes do sistema (de qualquer utilizador) que estejam atualmente marcados como apagados.
-     * Tipicamente utilizado numa vista global de lixeira para administradores.
-     *
-     * @return Uma lista contendo todos os {@link ClientsDTO} do sistema que tenham softDelete = true.
-     */
     public List<ClientsDTO> listAllDeletedClients() {
-        // Lixeira global: userId null e softDelete true
         return toDTOList(clientsDao.findClientsWithFilters(null, true));
     }
 }

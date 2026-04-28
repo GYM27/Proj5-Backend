@@ -15,35 +15,34 @@ import java.util.Properties;
 
 /**
  * O meu estafeta digital! 
- * Uso este Bean para enviar emails (convites, recuperação de pass, etc). 
- * Está configurado para usar o MailHog localmente, o que facilita imenso os testes.
+ * Configurado para MailHog (localhost:1025).
  */
 @Stateless
 public class EmailBean {
 
     private static final Logger logger = LogManager.getLogger(EmailBean.class);
 
-    // TODO: O ideal é mover estas credenciais para variáveis de ambiente ou para o standalone.xml do Wildfly
-    // Para um projeto académico, podes usar um SMTP de teste gratuito como o Mailtrap.io ou o teu próprio Gmail com App Password
-    // Configuração para MAILHOG (Ambiente de Testes Local)
     private static final String SMTP_HOST = "localhost"; 
     private static final String SMTP_PORT = "1025";
     private static final String SENDER_EMAIL = "noreply@crmbridge.com";
 
     /**
-     * O truque da performance: @Asynchronous! 
-     * Usei esta anotação para que o envio do email aconteça "nas costas" do utilizador. 
-     * Assim, o React recebe o "OK" instantaneamente e não tem de esperar que o servidor 
-     * SMTP responda.
+     * Envia o email de forma assíncrona para não bloquear o utilizador.
      */
     @Asynchronous
     public void sendEmail(String toEmail, String subject, String body) {
+        logger.info("A iniciar processo de envio de email para: " + toEmail);
+        
         try {
             Properties props = new Properties();
-            props.put("mail.smtp.auth", "false"); // MailHog não exige autenticação
+            props.put("mail.smtp.auth", "false");
             props.put("mail.smtp.starttls.enable", "false"); 
             props.put("mail.smtp.host", SMTP_HOST);
             props.put("mail.smtp.port", SMTP_PORT);
+            
+            // Timeout curto para não prender threads se o MailHog estiver desligado
+            props.put("mail.smtp.connectiontimeout", "3000"); 
+            props.put("mail.smtp.timeout", "3000");
 
             Session session = Session.getInstance(props);
 
@@ -53,11 +52,15 @@ public class EmailBean {
             message.setSubject(subject);
             message.setContent(body, "text/html; charset=utf-8");
 
+            // Tenta o envio. Se o MailHog estiver desligado, o erro é apanhado no catch
             Transport.send(message);
-            logger.info("Email enviado com sucesso para: " + toEmail);
+            
+            logger.info("Email enviado com sucesso (via MailHog) para: " + toEmail);
 
-        } catch (MessagingException e) {
-            logger.error("Falha ao enviar e-mail para: " + toEmail, e);
+        } catch (Exception e) {
+            // SILENCIAMOS o erro para o Frontend não receber um 500
+            // O email falha silenciosamente no servidor (apenas log), mas o processo do utilizador continua.
+            logger.error("ERRO CRÍTICO NO ENVIO DE EMAIL: O MailHog está ligado? Erro: " + e.getMessage());
         }
     }
 }

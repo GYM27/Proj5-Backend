@@ -6,20 +6,31 @@
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
 
-        <!-- Appender para Ficheiro (Cria pasta logs/ na raiz do backend) -->
-        <File name="MyFile" fileName="${sys:user.dir}/logs/projecto5.log" append="true">
+        <!-- Appender Geral do Sistema -->
+        <File name="MyFile" fileName="c:/AOR/PAJ/Proj5/BACKEND/logs/projecto5.log" append="true">
             <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </File>
+
+        <!--Appender Exclusivo para Auditoria -->
+        <File name="AuditFile" fileName="c:/AOR/PAJ/Proj5/BACKEND/logs/audit.log" append="true">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} | %msg%n"/>
         </File>
     </Appenders>
 
     <Loggers>
-        <!-- Configuração para as TUA classes (Nivel INFO para veres os teus logs) -->
+        <!-- Logger específico para Auditoria (AuditLogBean) -->
+        <Logger name="aor.paj.projecto5.bean.AuditLogBean" level="info" additivity="false">
+            <AppenderRef ref="AuditFile"/>
+            <AppenderRef ref="Console"/>
+        </Logger>
+
+        <!-- Configuração para o resto das classes do projeto -->
         <Logger name="aor.paj.projecto5" level="info" additivity="false">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="MyFile"/>
         </Logger>
 
-        <!-- Nivel global (Apenas erros para não encher o ficheiro) -->
+        <!-- Nivel global (Apenas erros) -->
         <Root level="error">
             <AppenderRef ref="Console"/>
         </Root>

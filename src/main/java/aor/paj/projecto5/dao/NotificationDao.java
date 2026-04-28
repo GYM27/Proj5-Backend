@@ -26,17 +26,14 @@ public class NotificationDao extends AbstractDao<NotificationEntity> implements 
 
     /**
      * Conta as notificações não lidas de um utilizador.
-     * Agora inclui também as MENSAGENS de CHAT não lidas para o sininho no Header ser real.
      */
     public Long countUnread(UserEntity user) {
-        // Conta notificações de sistema
         Long systemNotifications = em.createQuery(
                 "SELECT COUNT(n) FROM NotificationEntity n WHERE n.receiver = :user AND n.isRead = false", 
                 Long.class)
                 .setParameter("user", user)
                 .getSingleResult();
 
-        // Conta mensagens de chat não lidas
         Long unreadMessages = em.createQuery(
                 "SELECT COUNT(m) FROM MessageEntity m WHERE m.receiver = :user AND m.isRead = false", 
                 Long.class)
@@ -48,10 +45,33 @@ public class NotificationDao extends AbstractDao<NotificationEntity> implements 
     }
 
     /**
-     * Marca todas as notificações de um utilizador como lidas.
+     * Marca todas as notificações (Sistema e Chat) de um utilizador como lidas.
      */
     public void markAllAsRead(UserEntity user) {
         em.createQuery("UPDATE NotificationEntity n SET n.isRead = true WHERE n.receiver = :user")
+          .setParameter("user", user)
+          .executeUpdate();
+
+        em.createQuery("UPDATE MessageEntity m SET m.isRead = true WHERE m.receiver = :user")
+          .setParameter("user", user)
+          .executeUpdate();
+    }
+
+    /**
+     * Remove permanentemente todas as notificações de sistema de um utilizador.
+     */
+    public void deleteAllByUser(UserEntity user) {
+        em.createQuery("DELETE FROM NotificationEntity n WHERE n.receiver = :user")
+          .setParameter("user", user)
+          .executeUpdate();
+    }
+
+    /**
+     * Remove uma única notificação.
+     */
+    public void deleteByIdAndUser(Long id, UserEntity user) {
+        em.createQuery("DELETE FROM NotificationEntity n WHERE n.id = :id AND n.receiver = :user")
+          .setParameter("id", id)
           .setParameter("user", user)
           .executeUpdate();
     }
