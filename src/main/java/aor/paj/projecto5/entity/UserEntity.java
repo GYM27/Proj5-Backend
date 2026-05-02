@@ -27,26 +27,29 @@ public class UserEntity implements Serializable {
     private Long id;
 
     //@todo definir se o username é updatable ou não. Tendo em conta que o id é que conta em termos de identificação, pode ser updatable
-    @Column(name="username", nullable = false, unique = true, updatable = false)
+    @Column(name="username", nullable = true, unique = true, updatable = true)
     private String username;
 
-    @Column(name="password", nullable = false, unique = false, updatable = true)
+    @Column(name="password", nullable = true, unique = false, updatable = true)
     private String password;
 
     @Column(name="email",nullable = false,unique = true, updatable = true)
     private String email;
 
-    @Column(name="firstName", nullable = false, unique = false, updatable = true)
+    @Column(name="firstName", nullable = true, unique = false, updatable = true)
     private String firstName;
 
-    @Column(name="lastName", nullable = false,unique = false, updatable = true)
+    @Column(name="lastName", nullable = true, unique = false, updatable = true)
     private  String lastName;
 
-    @Column(name="contact", nullable = false, unique = true, updatable = true)
+    @Column(name="contact", nullable = true, unique = true, updatable = true)
     private String contact;
 
-    @Column(name="photo", nullable = true, unique = false, updatable = true, length = 1024)
+    @Column(name = "photo", length = 512, nullable = true)
     private String photo;
+
+    @Column(name = "language", length = 5, nullable = false, columnDefinition = "varchar(5) default 'pt'")
+    private String language = "pt"; // Valor por defeito: Português
 
     @Enumerated(EnumType.STRING)
     @Column(name="role", nullable = false)
@@ -161,6 +164,14 @@ public class UserEntity implements Serializable {
 
     public void setPhoto(String photo) {
         this.photo = photo;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
     }
 
     public UserRoles getUserRole() {

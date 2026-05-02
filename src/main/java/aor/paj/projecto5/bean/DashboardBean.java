@@ -20,8 +20,8 @@ public class DashboardBean {
      * Pede ao DAO os números para o Dashboard. 
      * Passo o ID do utilizador e o seu papel (role) para ele saber o que contar.
      */
-    public DashboardStatsDTO getStats(Long userId, String role) {
+    public DashboardStatsDTO getStats(Long userId, String role, Long targetUserId) {
         // A regra de negócio delega a responsabilidade de acesso a dados para o DAO
-        return dashboardDao.getDashboardStats(userId, role);
+        return dashboardDao.getDashboardStats(userId, role, targetUserId);
     }
 }

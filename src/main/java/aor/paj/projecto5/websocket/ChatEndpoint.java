@@ -30,10 +30,10 @@ public class ChatEndpoint {
     @Inject
     private TokenBean tokenBean;
 
-    /** * Mapa que associa o identificador único do utilizador (userId) à sua sessão WebSocket ativa.
-     * Permite o endereçamento direto de mensagens sem necessidade de consultar tokens.
+    /** * Mapa estático e thread-safe que associa o ID do utilizador à sua sessão ativa.
+     * Sendo estático, garantimos que todas as instâncias do endpoint partilham a mesma lista.
      */
-    private HashMap<Long, Session> sessions = new HashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<Long, Session> sessions = new java.util.concurrent.ConcurrentHashMap<>();
 
 
     /**
@@ -60,6 +60,15 @@ public class ChatEndpoint {
     }
 
     /**
+     * Verifica se um utilizador específico tem uma sessão ativa.
+     * @param userId ID do utilizador a verificar.
+     * @return true se estiver online, false caso contrário.
+     */
+    public boolean isUserOnline(Long userId) {
+        return sessions.containsKey(userId);
+    }
+
+    /**
      * Evento disparado no estabelecimento de uma nova ligação.
      * Realiza o 'handshake' de segurança validando o token e, em caso de sucesso,
      * regista a sessão no mapa utilizando o ID do utilizador.
@@ -68,38 +77,57 @@ public class ChatEndpoint {
      */
     @OnOpen
     public void onOpen(Session session, @PathParam("token") String token) {
-        // Recupera a entidade do utilizador através do token de segurança para validar a ligação
+        System.out.println("DEBUG: WebSocket onOpen chamado com token: " + token);
+        
+        // Garante a recuperação do bean via CDI caso a injeção falhe no contexto do WebSocket
+        if (tokenBean == null) {
+            tokenBean = jakarta.enterprise.inject.spi.CDI.current().select(TokenBean.class).get();
+        }
+        
         UserEntity user = tokenBean.getUserEntityByToken(token);
 
         if (user != null) {
-            // Regista a sessão usando o ID único do utilizador como chave primária de endereçamento
             sessions.put(user.getId(), session);
+            System.out.println("DEBUG: Sessão registada para o UserID: " + user.getId());
             logger.info("WebSocket: Sessão registada para o Utilizador ID: {}", user.getId());
+            
+            // Notifica todos os outros que este utilizador entrou
+            broadcastStatusUpdate(user.getId(), true);
         } else {
-            // Bloqueio de segurança: Se o token for inválido, encerra a ligação imediatamente
+            System.out.println("DEBUG: Token inválido ou User não encontrado no WebSocket. Token: " + token);
             try {
                 session.close(new CloseReason(CloseReason.CloseCodes.VIOLATED_POLICY, "Token Inválido"));
-                logger.warn("WebSocket: Tentativa de ligação com token inválido.");
             } catch (IOException e) {
-                logger.error("Erro ao encerrar sessão não autorizada: {}", e.getMessage());
+                logger.error("Erro ao encerrar sessão: {}", e.getMessage());
             }
         }
     }
 
-    /**
-     * Evento disparado quando uma ligação é encerrada, seja por iniciativa do cliente,
-     * erro de rede ou encerramento do servidor. Garante a limpeza do mapa de sessões.
-     * * @param session A sessão que está a ser encerrada.
-     * @param reason O motivo técnico do encerramento.
-     * @param token O token utilizado na abertura (usado aqui para identificar o utilizador a remover).
-     */
     @OnClose
     public void onClose(Session session, CloseReason reason, @PathParam("token") String token) {
-
+        if (tokenBean == null) {
+            tokenBean = jakarta.enterprise.inject.spi.CDI.current().select(TokenBean.class).get();
+        }
+        
         UserEntity user = tokenBean.getUserEntityByToken(token);
         if (user != null) {
             sessions.remove(user.getId());
+            System.out.println("DEBUG: Sessão removida para o UserID: " + user.getId());
             logger.info("Ligação WebSocket terminada para o utilizador {}. Motivo: {}", user.getId(), reason.getReasonPhrase());
+            
+            // Notifica todos que este utilizador saiu
+            broadcastStatusUpdate(user.getId(), false);
+        }
+    }
+
+    /**
+     * Envia um alerta de estado (Online/Offline) para todos os utilizadores ligados.
+     */
+    private void broadcastStatusUpdate(Long userId, boolean online) {
+        String msg = String.format("{\"type\":\"STATUS_UPDATE\", \"userId\":%d, \"online\":%b}", userId, online);
+        System.out.println("DEBUG: Broadcasting status: " + msg + " to " + sessions.size() + " users.");
+        for (Long id : sessions.keySet()) {
+            send(id, msg);
         }
     }
 

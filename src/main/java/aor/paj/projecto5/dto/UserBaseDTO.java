@@ -41,10 +41,26 @@ public class UserBaseDTO {
     @URL(message = "O link da foto deve ser um URL válido")
     private String photoUrl;
 
+    private String language;
+
+    /** Indica se o utilizador tem uma sessão WebSocket ativa no momento. */
+    private boolean online;
+
     public UserBaseDTO() {
     }
 
+    public boolean isOnline() { return online; }
+    public void setOnline(boolean online) { this.online = online; }
+
     // --- Getters e Setters ---
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
 
     public Long getId() {
         return id;

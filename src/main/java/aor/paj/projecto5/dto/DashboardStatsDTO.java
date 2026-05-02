@@ -16,10 +16,33 @@ public class DashboardStatsDTO implements Serializable {
     private long clientes;
     private long totalUsers;
     private long confirmedUsers;
+    private long inactiveUsers;
     private long meusLeads;
     private long meusClientes;
     private List<GrowthDataDTO> growthData = new ArrayList<>();
     private List<GrowthDataDTO> leadsGrowthData = new ArrayList<>();
+    private List<GrowthDataDTO> usersGrowthData = new ArrayList<>();
+    private List<UserPerformanceDTO> topPerformers = new ArrayList<>();
+
+    // DTO para o gráfico de performance de utilizadores
+    public static class UserPerformanceDTO implements Serializable {
+        private String username;
+        private long totalLeads;
+        private long wonLeads;
+        private double conversionRate;
+
+        public UserPerformanceDTO(String username, long totalLeads, long wonLeads, double conversionRate) {
+            this.username = username;
+            this.totalLeads = totalLeads;
+            this.wonLeads = wonLeads;
+            this.conversionRate = conversionRate;
+        }
+
+        public String getUsername() { return username; }
+        public long getTotalLeads() { return totalLeads; }
+        public long getWonLeads() { return wonLeads; }
+        public double getConversionRate() { return conversionRate; }
+    }
 
     // DTO para o gráfico de crescimento (ISO8601)
     public static class GrowthDataDTO implements Serializable {
@@ -60,11 +83,20 @@ public class DashboardStatsDTO implements Serializable {
     public long getConfirmedUsers() { return confirmedUsers; }
     public void setConfirmedUsers(long confirmedUsers) { this.confirmedUsers = confirmedUsers; }
 
+    public long getInactiveUsers() { return inactiveUsers; }
+    public void setInactiveUsers(long inactiveUsers) { this.inactiveUsers = inactiveUsers; }
+
     public List<GrowthDataDTO> getGrowthData() { return growthData; }
     public void setGrowthData(List<GrowthDataDTO> growthData) { this.growthData = growthData; }
 
     public List<GrowthDataDTO> getLeadsGrowthData() { return leadsGrowthData; }
     public void setLeadsGrowthData(List<GrowthDataDTO> leadsGrowthData) { this.leadsGrowthData = leadsGrowthData; }
+
+    public List<GrowthDataDTO> getUsersGrowthData() { return usersGrowthData; }
+    public void setUsersGrowthData(List<GrowthDataDTO> usersGrowthData) { this.usersGrowthData = usersGrowthData; }
+
+    public List<UserPerformanceDTO> getTopPerformers() { return topPerformers; }
+    public void setTopPerformers(List<UserPerformanceDTO> topPerformers) { this.topPerformers = topPerformers; }
 
     public long getMeusLeads() { return meusLeads; }
     public void setMeusLeads(long meusLeads) { this.meusLeads = meusLeads; }

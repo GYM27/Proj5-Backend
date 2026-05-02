@@ -26,7 +26,7 @@ public class DatabaseExceptionMapper implements ExceptionMapper<Exception> {
         for (int i = 0; i < 10 && cause != null; i++) {
             String message = cause.getMessage();
 
-            // 2. DETEÇÃO DE CONFLITOS (REGRA A9 / UNICIDADE):
+            // 2. DETEÇÃO DE CONFLITOS:
             // Procuramos por palavras-chave que indicam violação de campos ÚNICOS
             // definidos na UserEntity (username, email ou contact).
             if (message != null && (
@@ -37,7 +37,7 @@ public class DatabaseExceptionMapper implements ExceptionMapper<Exception> {
                             message.contains("UK_") // Comum em nomes de índices gerados pelo Hibernate
             )) {
 
-                // 3. RESPOSTA DE CONFLITO (409):
+
                 // Encontramos um duplicado. Criamos o ErrorResponse que o React espera ler.
                 ErrorResponse error = new ErrorResponse(
                         "Conflito de dados: O utilizador (username, email ou contacto) já se encontra registado no sistema.",

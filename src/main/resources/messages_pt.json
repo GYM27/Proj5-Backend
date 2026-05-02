@@ -1,0 +1,18 @@
+{
+  "error": {
+    "user_notfound": "Utilizador não encontrado.",
+    "login_failed": "Utilizador ou password incorretos.",
+    "session_invalid": "Sessão inválida ou expirada.",
+    "email_exists": "Este email já está em uso por outro utilizador.",
+    "username_exists": "Este nome de utilizador já está em uso.",
+    "password_incorrect": "A password atual está incorreta.",
+    "password_required": "Para mudar a password, deve fornecer a password atual.",
+    "permission_denied": "Não tem permissões para realizar esta ação.",
+    "token_invalid": "Token de confirmação inválido ou expirado."
+  },
+  "success": {
+    "profile_updated": "Perfil atualizado com sucesso.",
+    "password_changed": "Password alterada com sucesso.",
+    "user_registered": "Conta criada com sucesso! Já pode fazer login."
+  }
+}

@@ -44,8 +44,9 @@ public class UserVerificationBean {
 
     /**
      * Validação de Administrador: Garante que o utilizador tem permissões de ADMIN.
+     * Retorna a entidade do Administrador para uso no endpoint.
      */
-    public void verifyAdmin(String token) {
+    public UserEntity verifyAdmin(String token) {
         // Aproveitamos a validação básica (se não estiver ativo ou não existir, o verifyUser já lança erro)
         UserEntity user = verifyUser(token);
 
@@ -53,6 +54,8 @@ public class UserVerificationBean {
         if (user.getUserRole() != UserRoles.ADMIN) {
             throw new WebApplicationException("Acesso restrito a administradores.", 403);
         }
+        
+        return user;
     }
 
     // --- MÉTODOS DE PROPRIEDADE (OWNERSHIP) PARA LEADS E CLIENTES ---

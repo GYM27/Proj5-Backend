@@ -11,8 +11,9 @@ public class LoginResponseDTO {
     private UserRoles userRole;
     private String token;
     private String photoUrl;
+    private String language;
 
-    public LoginResponseDTO(Long id, String firstName, String lastName, String username, String email, UserRoles userRole, String token, String photoUrl) {
+    public LoginResponseDTO(Long id, String firstName, String lastName, String username, String email, UserRoles userRole, String token, String photoUrl, String language) {
         this.id = id;
         this.firstName = firstName;
         this.lastName = lastName;
@@ -21,9 +22,18 @@ public class LoginResponseDTO {
         this.userRole = userRole;
         this.token = token;
         this.photoUrl = photoUrl;
+        this.language = language;
     }
 
     public LoginResponseDTO(){}
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
 
     public Long getId() {
         return id;

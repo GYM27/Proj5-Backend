@@ -31,9 +31,18 @@ public class UserUpdateDTO {
     // Password é opcional na edição
     private String password;
 
+    // Password atual para validação de segurança
+    private String currentPassword;
+
+    private String language;
+
     public UserUpdateDTO() {}
 
     // Getters e Setters
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+    public String getCurrentPassword() { return currentPassword; }
+    public void setCurrentPassword(String currentPassword) { this.currentPassword = currentPassword; }
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }
 

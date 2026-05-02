@@ -1,0 +1,18 @@
+{
+  "error": {
+    "user_notfound": "User not found.",
+    "login_failed": "Incorrect username or password.",
+    "session_invalid": "Invalid or expired session.",
+    "email_exists": "This email is already in use by another user.",
+    "username_exists": "This username is already in use.",
+    "password_incorrect": "The current password is incorrect.",
+    "password_required": "To change the password, you must provide the current password.",
+    "permission_denied": "You do not have permission to perform this action.",
+    "token_invalid": "Invalid or expired confirmation token."
+  },
+  "success": {
+    "profile_updated": "Profile updated successfully.",
+    "password_changed": "Password changed successfully.",
+    "user_registered": "Account created successfully! You can now log in."
+  }
+}

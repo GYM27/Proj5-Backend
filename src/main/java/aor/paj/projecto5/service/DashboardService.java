@@ -9,6 +9,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -31,11 +32,11 @@ public class DashboardService {
     @GET
     @Path("/stats")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getDashboardStats(@HeaderParam("token") String token) {
+    public Response getDashboardStats(@HeaderParam("token") String token, @QueryParam("userId") Long targetUserId) {
         // Valida token e obtém utilizador associado (Entity)
         UserEntity user = verifier.verifyUser(token);
         
-        DashboardStatsDTO stats = dashboardBean.getStats(user.getId(), user.getUserRole().name());
+        DashboardStatsDTO stats = dashboardBean.getStats(user.getId(), user.getUserRole().name(), targetUserId);
         return Response.ok(stats).build();
     }
 }

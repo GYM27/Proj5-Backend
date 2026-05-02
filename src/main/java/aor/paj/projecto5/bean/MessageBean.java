@@ -92,14 +92,27 @@ public class MessageBean {
 
     /**
      * Marca todas as mensagens recebidas de um remetente específico como lidas.
+     * E notifica o remetente original via WebSocket para atualização em tempo real (check azul).
      */
     public void markAsRead(UserEntity receiver, String senderUsername) {
         UserEntity sender = userDao.findUserByUsername(senderUsername);
         if (sender == null) return;
 
-        em.createQuery("UPDATE MessageEntity m SET m.isRead = true WHERE m.receiver = :receiver AND m.sender = :sender AND m.isRead = false")
+        int updatedCount = em.createQuery("UPDATE MessageEntity m SET m.isRead = true WHERE m.receiver = :receiver AND m.sender = :sender AND m.isRead = false")
                 .setParameter("receiver", receiver)
                 .setParameter("sender", sender)
                 .executeUpdate();
+
+        // Se mensagens foram marcadas como lidas, notificamos o remetente original
+        if (updatedCount > 0) {
+            String wsPayload = Json.createObjectBuilder()
+                    .add("type", "READ_CONFIRMATION")
+                    .add("reader", receiver.getUsername()) // Quem leu
+                    .add("sender", sender.getUsername())   // Quem enviou (destinatário da notificação)
+                    .build()
+                    .toString();
+
+            chatEndpoint.send(sender.getId(), wsPayload);
+        }
     }
 }

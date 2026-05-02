@@ -29,9 +29,6 @@ public class UserService {
     @Inject
     UserVerificationBean verifier;
 
-    /**
-     * POST /users/invite -> Envia convite por email.
-     */
     @POST
     @Path("/invite")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -39,6 +36,40 @@ public class UserService {
         verifier.verifyAdmin(adminToken);
         usersBean.requestRegistration(emailDTO.getEmail());
         return Response.ok("{\"message\":\"Convite enviado com sucesso para " + emailDTO.getEmail() + "\"}").build();
+    }
+
+    /**
+     * GET /users/invites -> Lista todos os convites pendentes.
+     */
+    @GET
+    @Path("/invites")
+    public Response getPendingInvites(@HeaderParam("token") String adminToken) {
+        verifier.verifyAdmin(adminToken);
+        List<UserBaseDTO> invites = usersBean.getAllPendingInvites();
+        return Response.ok(invites).build();
+    }
+
+    /**
+     * DELETE /users/invites/{email} -> Cancela um convite.
+     */
+    @DELETE
+    @Path("/invites/{email}")
+    public Response cancelInvite(@PathParam("email") String email, @HeaderParam("token") String adminToken) {
+        verifier.verifyAdmin(adminToken);
+        usersBean.cancelInvitation(email);
+        return Response.ok("{\"message\":\"Convite cancelado com sucesso.\"}").build();
+    }
+
+    /**
+     * POST /users/invites/resend -> Reenvia um convite.
+     */
+    @POST
+    @Path("/invites/resend")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response resendInvite(@Valid EmailDTO emailDTO, @HeaderParam("token") String adminToken) {
+        verifier.verifyAdmin(adminToken);
+        usersBean.resendInvitation(emailDTO.getEmail());
+        return Response.ok("{\"message\":\"Convite reenviado com sucesso.\"}").build();
     }
 
     /**
@@ -77,6 +108,17 @@ public class UserService {
         return Response.ok("{\"message\":\"Perfil atualizado com sucesso\"}").build();
     }
 
+    @PUT
+    @Path("/{id:[0-9]+}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response updateUserProfile(@PathParam("id") Long id, @HeaderParam("token") String token, @Valid UserUpdateDTO userDTO) {
+        UserEntity admin = verifier.verifyAdmin(token);
+        // O administrador pode editar os dados pessoais (nome, email, etc.)
+        // A desativação ou alteração de role é feita noutros endpoints que já estão protegidos.
+        usersBean.updateUser(id, userDTO);
+        return Response.ok("{\"message\":\"Utilizador atualizado com sucesso por Administrador\"}").build();
+    }
+
     @GET
     public Response getAllUsers(@HeaderParam("token") String token, @QueryParam("search") String search) {
         UserEntity requester = verifier.verifyUser(token);
@@ -103,7 +145,10 @@ public class UserService {
     @PATCH
     @Path("/{id:[0-9]+}/deactivate")
     public Response deactivateUser(@PathParam("id") Long id, @HeaderParam("token") String token) {
-        verifier.verifyAdmin(token);
+        UserEntity admin = verifier.verifyAdmin(token);
+        if (admin.getId().equals(id)) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\":\"Não pode desativar a sua própria conta.\"}").build();
+        }
         usersBean.softDeleteUser(id);
         return Response.ok("{\"message\":\"Utilizador desativado.\"}").build();
     }
@@ -119,7 +164,10 @@ public class UserService {
     @DELETE
     @Path("/{id:[0-9]+}")
     public Response deleteUser(@PathParam("id") Long id, @HeaderParam("token") String token) {
-        verifier.verifyAdmin(token);
+        UserEntity admin = verifier.verifyAdmin(token);
+        if (admin.getId().equals(id)) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\":\"Não pode eliminar a sua própria conta.\"}").build();
+        }
         usersBean.deleteUser(id);
         return Response.ok("{\"message\":\"Utilizador removido permanentemente.\"}").build();
     }
