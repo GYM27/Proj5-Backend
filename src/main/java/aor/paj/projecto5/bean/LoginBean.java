@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.Serial;
 import java.io.Serializable;
 
+import aor.paj.projecto5.entity.UserEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -29,6 +30,9 @@ public class LoginBean implements Serializable {
 
     @Inject
     private TokenBean tokenBean;
+
+    @Inject
+    private AuditLogBean auditLogBean;
 
     public LoginBean() {}
 
@@ -63,6 +67,11 @@ public class LoginBean implements Serializable {
     public boolean logout(String token) {
         if (token == null || token.isEmpty()) {
             return false;
+        }
+
+        UserEntity user = tokenBean.getUserEntityByToken(token);
+        if (user != null) {
+            auditLogBean.logAction(user, "LOGOUT", "Sessão encerrada voluntariamente.");
         }
 
         // Invalida o token no TokenBean -> TokenDao
