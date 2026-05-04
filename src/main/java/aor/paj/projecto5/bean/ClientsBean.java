@@ -48,6 +48,19 @@ public class ClientsBean {
         dto.setPhone(entity.getPhone());
         dto.setOrganization(entity.getOrganization());
         dto.setSoftDeleted(entity.isSoftDelete());
+
+        if (entity.getOwner() != null) {
+            String firstName = entity.getOwner().getFirstName();
+            String lastName = entity.getOwner().getLastName();
+            String username = entity.getOwner().getUsername();
+
+            if ((firstName == null || firstName.isEmpty()) && (lastName == null || lastName.isEmpty())) {
+                dto.setOwnerName(username); // Fallback para o username
+            } else {
+                String fullName = (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "");
+                dto.setOwnerName(fullName.trim());
+            }
+        }
         return dto;
     }
 

@@ -26,10 +26,19 @@ public class ClientsDTO implements Serializable {
     private String phone;
 
     private String organization;
-    private boolean softDeleted;// Opcional segundo o enunciado
+    private boolean softDeleted;
+    private String ownerName; // Novo: Nome do consultor responsável
 
     // Construtor vazio obrigatório para a desserialização JSON
     public ClientsDTO() {
+    }
+
+    public String getOwnerName() {
+        return ownerName;
+    }
+
+    public void setOwnerName(String ownerName) {
+        this.ownerName = ownerName;
     }
 
     // Getters e Setters
