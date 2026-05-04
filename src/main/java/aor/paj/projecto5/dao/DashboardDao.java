@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 /**
- * Motor de estatísticas para o Dashboard (Versão Corrigida para Histórico de Equipa).
+ * Motor de estatísticas para o Dashboard.
  */
 @Stateless
 public class DashboardDao implements Serializable {

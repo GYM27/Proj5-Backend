@@ -3,7 +3,7 @@ package aor.paj.projecto5.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import org.hibernate.validator.constraints.URL;
+
 
 /**
  * DTO específico para a atualização de perfil pelo próprio utilizador.
