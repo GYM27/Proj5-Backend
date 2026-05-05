@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import jakarta.persistence.PrePersist;
 
 @Entity
 @Table(name = "confirmation_tokens")
@@ -27,6 +28,16 @@ public class ConfirmationTokenEntity implements Serializable {
     private LocalDateTime expiresAt;
 
     private LocalDateTime confirmedAt;
+    
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (expiresAt == null) {
+            expiresAt = LocalDateTime.now().plusHours(24);
+        }
+    }
 
     public ConfirmationTokenEntity() {}
 

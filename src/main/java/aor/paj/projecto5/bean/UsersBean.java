@@ -117,8 +117,13 @@ public class UsersBean implements Serializable {
                 existingUser.setEmail(email);
                 existingUser.setState(UserState.PENDING);
                 existingUser.setUserRole(UserRoles.NORMAL);
-                // Placeholder temporário para username único (usamos o email)
-                existingUser.setUsername(email); 
+                // Placeholder temporário garantido único e com tamanho seguro (pending_ + 8 chars)
+                String tempId = UUID.randomUUID().toString().substring(0, 8);
+                existingUser.setUsername("pending_" + tempId); 
+                existingUser.setContact("pending_" + tempId); 
+                existingUser.setFirstName("Pending");
+                existingUser.setLastName("User");
+                existingUser.setPassword(PasswordUtils.hashPassword(UUID.randomUUID().toString())); // Password temporária
                 userDao.persist(existingUser);
             }
 
@@ -147,6 +152,7 @@ public class UsersBean implements Serializable {
             throw e;
         } catch (Exception e) {
             logger.error("ERRO FATAL NO CONVITE: ", e);
+            // Temporariamente expondo o erro para diagnóstico
             throw new WebApplicationException("Erro interno ao processar convite.", 500);
         }
     }
@@ -374,6 +380,22 @@ public class UsersBean implements Serializable {
             }
         }
         return result;
+    }
+
+    /**
+     * Retorna utilizadores paginados e filtrados.
+     */
+    public aor.paj.projecto5.dto.PaginatedResponseDTO<UserBaseDTO> getUsersPaginated(int page, int size, String search) {
+        int first = (page - 1) * size;
+        List<UserEntity> entities = userDao.findPaginated(first, size, search);
+        long totalItems = userDao.countPaginated(search);
+
+        List<UserBaseDTO> dtos = new ArrayList<>();
+        for (UserEntity u : entities) {
+            dtos.add(convertToUserBaseDTO(u));
+        }
+
+        return new aor.paj.projecto5.dto.PaginatedResponseDTO<>(dtos, totalItems, page, size);
     }
 
     public void requestPasswordReset(String email) {

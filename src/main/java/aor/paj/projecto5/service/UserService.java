@@ -120,15 +120,16 @@ public class UserService {
     }
 
     @GET
-    public Response getAllUsers(@HeaderParam("token") String token, @QueryParam("search") String search) {
-        UserEntity requester = verifier.verifyUser(token);
-        List<UserBaseDTO> users;
-        if (requester.getUserRole() == UserRoles.ADMIN) {
-            users = usersBean.getAllUsers(search);
-        } else {
-            users = usersBean.getAllActiveUsers();
-        }
-        return Response.ok(users).build();
+    public Response getAllUsers(
+            @HeaderParam("token") String token, 
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size) {
+        verifier.verifyUser(token);
+        
+        // A paginação e filtragem agora ocorrem inteiramente no Backend
+        var paginatedResponse = usersBean.getUsersPaginated(page, size, search);
+        return Response.ok(paginatedResponse).build();
     }
 
     @GET

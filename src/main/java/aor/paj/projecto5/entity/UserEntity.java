@@ -4,6 +4,8 @@ import aor.paj.projecto5.utils.UserState;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import aor.paj.projecto5.utils.UserRoles;
+import java.time.LocalDateTime;
+import jakarta.persistence.PrePersist;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -61,7 +63,14 @@ public class UserEntity implements Serializable {
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
+    
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 
     public java.time.LocalDateTime getCreatedAt() {
         return createdAt;

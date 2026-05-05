@@ -6,6 +6,7 @@ import aor.paj.projecto5.bean.LeadsBean;
 import aor.paj.projecto5.bean.LoginBean;
 import aor.paj.projecto5.bean.UserVerificationBean;
 import aor.paj.projecto5.dto.LeadDTO;
+import aor.paj.projecto5.entity.UserEntity;
 import aor.paj.projecto5.exception.ErrorResponse;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -25,9 +26,8 @@ public class LeadService {
 
 
     /**
-     * Onde o utilizador cria as suas oportunidades (Leads).
-     * Decidi usar a anotação @Valid aqui para que, se o React me mandar uma Lead 
-     * sem título, o Java bloqueie logo o pedido sem dar erro de Base de Dados.
+     * Initializes the creation of a new lead.
+     * Validates input data integrity according to Bean Validation constraints.
      */
     @POST
     @Path("/")
@@ -36,18 +36,16 @@ public class LeadService {
     public Response createLead(@HeaderParam("token") String token,
                                @Valid LeadDTO leadDTO) {
 
-        // 1. Segurança: Verifica se o token é válido e o utilizador está ativo
+        // 1. Validação de token e estado do utilizador
         verifier.verifyUser(token);
-        // 2. Lógica: O Bean cria a lead e já nos devolve o DTO com o ID gerado
+        // 2. Persistência da entidade através do bean de negócio
         LeadDTO created = leadsBean.addLead(token, leadDTO);
-        // 3. Resposta: Status 201 (Created) enviando o objeto completo para o React
+        // 3. Retorno do recurso criado com status 201
         return Response.status(Response.Status.CREATED).entity(created).build();
     }
 
     /**
-     * O endpoint que alimenta o Kanban e o Dashboard.
-     * Eu pus isto dinâmico: o Frontend pode mandar ?softDeleted=true no URL se 
-     * quiser ver a lixeira, ou enviar a flag 'state' se quiser só as leads "Ganhas".
+     * Recupera a lista de leads do utilizador autenticado com suporte a filtros e paginação.
      */
     @GET
     @Path("/")
@@ -55,30 +53,21 @@ public class LeadService {
     public Response getLeads(
             @HeaderParam("token") String token,
             @QueryParam("softDeleted") Boolean softDeleted,
-            @QueryParam("state") Integer state // Se quiseres filtrar logo por estado no backend
+            @QueryParam("state") Integer stateId,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size
     ) {
-
-        // 1. Segurança
-        verifier.verifyUser(token);
-
-        // 2. Tratar os valores por defeito (se o React não enviar softDeleted, assumimos false)
-        boolean isTrash = (softDeleted != null) ? softDeleted : false;
-
-        // 3. Lógica: Passamos a flag "isTrash" para o Bean decidir qual query usar
-        // Tens de atualizar o teu LeadsBean para aceitar este segundo argumento
-        List<LeadDTO> leads = leadsBean.getLeadsByToken(token, isTrash);
-
-        // Se também quiseres filtrar por estado no backend (opcional):
-        // if (state != null) { ... filtrar a lista ou enviar o state para a query ... }
-
-        // 4. Resposta
-        return Response.ok(leads).build();
+        UserEntity user = verifier.verifyUser(token);
+        
+        // Paginação e filtragem no Backend
+        var response = leadsBean.getLeadsPaginated(stateId, user.getId(), softDeleted, search, page, size);
+        return Response.ok(response).build();
     }
 
     /**
-     * Buscar os detalhes de uma lead específica.
-     * A magia disto está no 'verifyLeadOwnership': ele garante que um utilizador normal 
-     * não consegue espiar a lead do seu colega do lado. Segurança primeiro!
+     * Recupera os detalhes de uma lead específica através do seu identificador.
+     * Verifica a propriedade do recurso antes de permitir o acesso.
      */
     @GET
     @Path("/{leadId:[0-9]+}") // Retiramos o /me para padronizar com /clients
@@ -86,15 +75,13 @@ public class LeadService {
     public Response getLeadById(@HeaderParam("token") String token,
                                 @PathParam("leadId") Long leadId) {
 
-        //Esta única linha faz todo o trabalho
-        // Se não for o dono ou admin, ou se a lead não existir, lança logo a exceção (401, 403 ou 404).
+        // Validação de acesso e existência do recurso
         verifier.verifyLeadOwnership(token, leadId);
 
         // 2. LÓGICA: Se o código chegou aqui, é porque a lead existe e o user tem permissão.
         // O Bean agora só precisa de ir buscar e converter.
         LeadDTO lead = leadsBean.getLeadById(leadId);
 
-        // 3. RESPOSTA: Sucesso garantido.
         return Response.ok(lead).build();
     }
 
@@ -117,8 +104,7 @@ public class LeadService {
 
 
     /**
-     * Soft Delete de uma Lead. O utilizador acha que apagou, mas na verdade 
-     * a lead só vai para a lixeira.
+     * Realiza a eliminação lógica (soft delete) de uma lead.
      */
     @DELETE
     @Path("/{leadId}") // URL limpa e profissional
@@ -141,7 +127,7 @@ public class LeadService {
     //*************************Secção do Administrador***************************************************************
 
     /**
-     * Restaurar uma Lead da lixeira.
+     * Restaura uma lead do estado de eliminação lógica.
      */
     @PATCH
     @Path("/{leadId}/restore")
@@ -159,30 +145,28 @@ public class LeadService {
     }
 
     /**
-     * Lista todas as leads do sistema com filtros dinâmicos.
-     * Lista TUDO. Pode filtrar por user, por estado ou ver o que está na lixeira usando @QueryParam.
+     * Endpoint administrativo para listagem global de leads com filtros avançados.
      */
     @GET
     @Path("/admin")
     @Produces(MediaType.APPLICATION_JSON)
     public Response adminGetLeads(
             @HeaderParam("token") String token,
-            @QueryParam("state") Integer stateId,          // Opcional
-            @QueryParam("userId") Long userId,             // Opcional
-            @QueryParam("softDeleted") Boolean softDeleted // Opcional (true/false)
+            @QueryParam("state") Integer stateId,
+            @QueryParam("userId") Long userId,
+            @QueryParam("softDeleted") Boolean softDeleted,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size
     ) {
-        // 1. Segurança: Apenas Admins entram aqui
         verifier.verifyAdmin(token);
-        // 2. Lógica: O Bean constrói a Query baseada nos filtros enviados
-        List<LeadDTO> leads = leadsBean.getLeadsWithFilters(stateId, userId, softDeleted);
-        return Response.ok(leads).build();
+        var response = leadsBean.getLeadsPaginated(stateId, userId, softDeleted, search, page, size);
+        return Response.ok(response).build();
     }
 
 
     /**
-     * A "chave-mestra" dos Admins.
-     * Edita qualquer lead, de qualquer pessoa. Eu uso isto inclusivamente para 
-     * o Admin tirar leads da lixeira ou mudar o dono delas.
+     * Permite a edição administrativa de qualquer lead no sistema.
      */
     @PUT
     @Path("/admin/{leadId}")
@@ -226,8 +210,7 @@ public class LeadService {
 
 
     /**
-     * O verdadeiro DELETE. 
-     * Quando o Admin clica nisto, a lead desaparece mesmo do PostgreSQL. Sem retorno.
+     * Eliminação definitiva (hard delete) de uma lead do sistema.
      */
     @DELETE
     @Path("/admin/{leadId}")
@@ -243,8 +226,7 @@ public class LeadService {
     }
 
     /**
-     * A11 Soft Delete em lote: Marca todas as leads de um utilizador como eliminadas.
-     * Útil para quando um utilizador sai da empresa ou muda de departamento.
+     * Operação em lote para marcação de todas as leads de um utilizador para eliminação lógica.
      */
     @POST
     @Path("/admin/{userId}/softdeleteall")

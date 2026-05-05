@@ -132,10 +132,37 @@ public class UserDao extends AbstractDao<UserEntity> implements Serializable {
     }
 
     /**
-     * O fim da linha para um utilizador. 
-     * Depois de o Bean garantir que os dados dele foram transferidos, eu removo 
-     * a linha da tabela permanentemente.
+     * Procura utilizadores com paginação e filtragem no Backend.
      */
+    public List<UserEntity> findPaginated(int first, int size, String search) {
+        String jpql = "SELECT u FROM UserEntity u WHERE u.username != 'deleted_user' ";
+        if (search != null && !search.isEmpty()) {
+            jpql += "AND (LOWER(u.username) LIKE :search OR LOWER(u.email) LIKE :search OR LOWER(u.firstName) LIKE :search OR LOWER(u.lastName) LIKE :search) ";
+        }
+        jpql += "ORDER BY u.id ASC";
+        
+        var query = em.createQuery(jpql, UserEntity.class);
+        if (search != null && !search.isEmpty()) {
+            query.setParameter("search", "%" + search.toLowerCase() + "%");
+        }
+        return query.setFirstResult(first).setMaxResults(size).getResultList();
+    }
+
+    /**
+     * Conta o total de utilizadores que correspondem ao filtro (para calcular páginas).
+     */
+    public long countPaginated(String search) {
+        String jpql = "SELECT COUNT(u) FROM UserEntity u WHERE u.username != 'deleted_user' ";
+        if (search != null && !search.isEmpty()) {
+            jpql += "AND (LOWER(u.username) LIKE :search OR LOWER(u.email) LIKE :search OR LOWER(u.firstName) LIKE :search OR LOWER(u.lastName) LIKE :search) ";
+        }
+        var query = em.createQuery(jpql, Long.class);
+        if (search != null && !search.isEmpty()) {
+            query.setParameter("search", "%" + search.toLowerCase() + "%");
+        }
+        return query.getSingleResult();
+    }
+
     public boolean hardDelete(Long id) {
         UserEntity userEntity = em.find(UserEntity.class, id);
         if (userEntity != null) {

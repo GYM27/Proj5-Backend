@@ -7,17 +7,7 @@ import aor.paj.projecto5.bean.UserVerificationBean;
 import aor.paj.projecto5.dto.ClientsDTO;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.HeaderParam;
-import jakarta.ws.rs.PATCH;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -69,12 +59,15 @@ public class ClientsService {
     @Produces(MediaType.APPLICATION_JSON)
     public Response listClients(
             @HeaderParam("token") String token,
-            @QueryParam("userId") Long userId // Permite filtragem opcional via URL
+            @QueryParam("userId") Long userId,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size
     ) {
         verifier.verifyUser(token);
-        // LÓGICA DE NEGÓCIO: O Bean trata a lógica Admin vs User internamente
-        List<ClientsDTO> clients = clientsBean.listClients(token, userId);
-        return Response.ok(clients).build();
+        // O Bean trata a lógica Admin vs User e devolve o DTO paginado
+        var response = clientsBean.listClientsPaginated(token, userId, false, search, page, size);
+        return Response.ok(response).build();
     }
 
     /**
@@ -138,15 +131,15 @@ public class ClientsService {
     @GET
     @Path("/me-trash")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getMyTrash(@HeaderParam("token") String token) {
-        // 1. Apenas exige que seja um utilizador válido
+    public Response getMyTrash(
+            @HeaderParam("token") String token,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size) {
         verifier.verifyUser(token);
-
-        // 2. LÓGICA INTELIGENTE: Como ele não é Admin,
-        // o teu Bean vai ignorar o 'null' e usar o ID do próprio utilizador.
-        List<ClientsDTO> trash = clientsBean.listDeletedClientsDTO(token, null);
-
-        return Response.ok(trash).build();
+        // Lixeia paginada para o próprio utilizador
+        var response = clientsBean.listClientsPaginated(token, null, true, search, page, size);
+        return Response.ok(response).build();
     }
 
 
@@ -193,11 +186,13 @@ public class ClientsService {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getDeletedClientsByUserId(
             @HeaderParam("token") String token,
-            @PathParam("userId") Long userId) {
+            @PathParam("userId") Long userId,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size) {
         verifier.verifyAdmin(token);
-        // Atualizado para usar o novo método dinâmico com filtro
-        List<ClientsDTO> clients = clientsBean.listDeletedClientsDTO(token, userId);
-        return Response.ok(clients).build();
+        var response = clientsBean.listClientsPaginated(token, userId, true, search, page, size);
+        return Response.ok(response).build();
     }
 
     /**
@@ -247,10 +242,13 @@ public class ClientsService {
     @GET
     @Path("/trash")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getAllDeletedClients(@HeaderParam("token") String token) {
+    public Response getAllDeletedClients(
+            @HeaderParam("token") String token,
+            @QueryParam("search") String search,
+            @QueryParam("page") @DefaultValue("1") int page,
+            @QueryParam("size") @DefaultValue("10") int size) {
         verifier.verifyAdmin(token);
-        // Chama a lixeira global sem filtro de utilizador
-        List<ClientsDTO> clients = clientsBean.listAllDeletedClients();
-        return Response.ok(clients).build();
+        var response = clientsBean.listClientsPaginated(token, null, true, search, page, size);
+        return Response.ok(response).build();
     }
 }

@@ -3,6 +3,7 @@ package aor.paj.projecto5.entity;
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import jakarta.persistence.PrePersist;
 
 /**
  * Entidade para o Log de Auditoria.
@@ -33,6 +34,13 @@ public class AuditLogEntity implements Serializable {
 
     @Column(name = "ip_address")
     private String ipAddress;
+    
+    @PrePersist
+    protected void onCreate() {
+        if (timestamp == null) {
+            timestamp = LocalDateTime.now();
+        }
+    }
 
     public AuditLogEntity() {
         this.timestamp = LocalDateTime.now();

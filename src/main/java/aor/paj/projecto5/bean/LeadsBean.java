@@ -18,8 +18,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * EJB para gestão de Leads com Auditoria integrada.
- * Restaurada a lista completa de métodos de Administrador.
+ * Bean de lógica de negócio para a entidade Lead.
+ * Concentra as operações de CRUD, gestão de estados e registo de auditoria.
  */
 @Stateless
 public class LeadsBean implements Serializable {
@@ -73,7 +73,9 @@ public class LeadsBean implements Serializable {
         return entities.stream().map(this::entityToDTO).collect(Collectors.toList());
     }
 
-    // --- Ações de Utilizador ---
+    /**
+     * Adiciona uma nova lead associada ao utilizador autenticado.
+     */
 
     public LeadDTO addLead(String token, LeadDTO dto) {
         UserEntity owner = tokenBean.getUserEntityByToken(token);
@@ -116,7 +118,9 @@ public class LeadsBean implements Serializable {
         }
     }
 
-    // --- Ações de Admin ---
+    /**
+     * Secção de operações exclusivas para o perfil de Administrador.
+     */
 
     public void restoreLead(Long leadId) {
         LeadEntity lead = leadDao.getLeadByLeadID(leadId);
@@ -129,6 +133,19 @@ public class LeadsBean implements Serializable {
 
     public List<LeadDTO> getLeadsWithFilters(Integer stateId, Long userId, Boolean softDeleted) {
         return toDTOList(leadDao.findLeadsWithFilters(stateId, userId, softDeleted));
+    }
+
+    /**
+     * Recupera uma lista paginada e filtrada de leads.
+     * @return PaginatedResponseDTO contendo a lista de DTOs e metadados de paginação.
+     */
+    public aor.paj.projecto5.dto.PaginatedResponseDTO<LeadDTO> getLeadsPaginated(Integer stateId, Long userId, Boolean softDeleted, String search, int page, int size) {
+        int first = (page - 1) * size;
+        
+        List<LeadEntity> entities = leadDao.findPaginated(stateId, userId, softDeleted, search, first, size);
+        long totalItems = leadDao.countPaginated(stateId, userId, softDeleted, search);
+        
+        return new aor.paj.projecto5.dto.PaginatedResponseDTO<>(toDTOList(entities), totalItems, page, size);
     }
 
     public LeadDTO adminSuperEdit(Long leadId, LeadDTO dto) {

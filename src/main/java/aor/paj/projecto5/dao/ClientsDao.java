@@ -21,28 +21,49 @@ public class ClientsDao extends AbstractDao<ClientsEntity> {
     }
 
     /**
-     * O meu filtro dinâmico de clientes. 
-     * Consegue separar os ativos dos apagados e filtrar por dono, tudo numa só função.
+     * Procura clientes com paginação e filtro de pesquisa (Requisito Backend).
      */
-    public List<ClientsEntity> findClientsWithFilters(Long ownerId, Boolean softDelete) {
+    public List<ClientsEntity> findPaginated(Long ownerId, Boolean softDelete, String search, int first, int size) {
         StringBuilder sb = new StringBuilder("SELECT c FROM ClientsEntity c WHERE 1=1");
-
-        if (ownerId != null) {
-            sb.append(" AND c.owner.id = :ownerId");
+        if (ownerId != null) sb.append(" AND c.owner.id = :ownerId");
+        if (softDelete != null) sb.append(" AND c.softDelete = :softDelete");
+        if (search != null && !search.isEmpty()) {
+            sb.append(" AND (LOWER(c.name) LIKE :search OR LOWER(c.email) LIKE :search OR LOWER(c.phone) LIKE :search OR LOWER(c.organization) LIKE :search)");
         }
-
-        if (softDelete != null) {
-            sb.append(" AND c.softDelete = :softDelete");
-        } else {
-            sb.append(" AND c.softDelete = false"); // Comportamento padrão: apenas ativos
-        }
-
+        sb.append(" ORDER BY c.id DESC");
+        
         TypedQuery<ClientsEntity> query = em.createQuery(sb.toString(), ClientsEntity.class);
-
         if (ownerId != null) query.setParameter("ownerId", ownerId);
         if (softDelete != null) query.setParameter("softDelete", softDelete);
+        if (search != null && !search.isEmpty()) query.setParameter("search", "%" + search.toLowerCase() + "%");
+        
+        return query.setFirstResult(first).setMaxResults(size).getResultList();
+    }
 
-        return query.getResultList();
+    /**
+     * Conta o total de clientes para a paginação.
+     */
+    public long countPaginated(Long ownerId, Boolean softDelete, String search) {
+        StringBuilder sb = new StringBuilder("SELECT COUNT(c) FROM ClientsEntity c WHERE 1=1");
+        if (ownerId != null) sb.append(" AND c.owner.id = :ownerId");
+        if (softDelete != null) sb.append(" AND c.softDelete = :softDelete");
+        if (search != null && !search.isEmpty()) {
+            sb.append(" AND (LOWER(c.name) LIKE :search OR LOWER(c.email) LIKE :search OR LOWER(c.phone) LIKE :search OR LOWER(c.organization) LIKE :search)");
+        }
+        
+        TypedQuery<Long> query = em.createQuery(sb.toString(), Long.class);
+        if (ownerId != null) query.setParameter("ownerId", ownerId);
+        if (softDelete != null) query.setParameter("softDelete", softDelete);
+        if (search != null && !search.isEmpty()) query.setParameter("search", "%" + search.toLowerCase() + "%");
+        
+        return query.getSingleResult();
+    }
+
+    /**
+     * O meu filtro dinâmico de clientes. 
+     */
+    public List<ClientsEntity> findClientsWithFilters(Long ownerId, Boolean softDelete) {
+        return findPaginated(ownerId, softDelete, null, 0, Integer.MAX_VALUE);
     }
 
     /**

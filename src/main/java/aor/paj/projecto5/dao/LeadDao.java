@@ -12,8 +12,8 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * O motor de busca das minhas Leads. 
- * Aqui é onde o JPA brilha, convertendo as minhas queries em SQL para o PostgreSQL.
+ * DAO para a entidade Lead.
+ * Gere todas as operações de persistência, filtragem e paginação das oportunidades de negócio.
  */
 @Stateless
 public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
@@ -29,7 +29,7 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * Vai buscar APENAS as leads que estão na lixeira de um utilizador normal
+     * Recupera a lista de leads em estado de eliminação lógica (lixeira) para um utilizador específico.
      */
     public List<LeadEntity> getTrashLeadsByUserId(Long userId) {
         return em.createNamedQuery("lead.findSoftDelUserLeads", LeadEntity.class)
@@ -38,42 +38,69 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * O meu "Super Filtro". 
-     * Como o Admin precisa de filtrar por tudo e mais alguma coisa, criei esta query dinâmica 
-     * usando um StringBuilder para ir acrescentando as condições conforme o que o React manda.
+     * Realiza uma pesquisa paginada de leads com suporte a múltiplos filtros dinâmicos.
+     * @param stateId ID do estado da lead
+     * @param userId ID do proprietário
+     * @param softDeleted Estado de eliminação lógica
+     * @param search Termo de pesquisa (título ou descrição)
+     * @param first Índice do primeiro registo (offset)
+     * @param size Número máximo de registos a recuperar
      */
-    public List<LeadEntity> findLeadsWithFilters(Integer stateId, Long userId, Boolean softDeleted) {
+    public List<LeadEntity> findPaginated(Integer stateId, Long userId, Boolean softDeleted, String search, int first, int size) {
         StringBuilder sb = new StringBuilder("SELECT l FROM LeadEntity l WHERE 1=1");
-
-        // Construção dinâmica da query (Append)
         if (stateId != null) sb.append(" AND l.leadState = :state");
         if (userId != null) sb.append(" AND l.owner.id = :userId");
-
-        if (softDeleted != null) {
-            sb.append(" AND l.softDeleted = :softDeleted");
-        } else {
-            sb.append(" AND l.softDeleted = false"); // Padrão: não mostrar lixo
+        if (softDeleted != null) sb.append(" AND l.softDeleted = :softDeleted");
+        else sb.append(" AND l.softDeleted = false");
+        
+        if (search != null && !search.isEmpty()) {
+            sb.append(" AND (LOWER(l.titulo) LIKE :search OR LOWER(l.descricao) LIKE :search)");
         }
-
+        sb.append(" ORDER BY l.data DESC");
+        
         TypedQuery<LeadEntity> query = em.createQuery(sb.toString(), LeadEntity.class);
-
-        // Atribuição segura de parâmetros (Set)
-        if (stateId != null) {
-            try {
-                query.setParameter("state", LeadState.fromId(stateId));
-            } catch (Exception e) {
-                throw new WebApplicationException("Estado de lead inválido: " + stateId, 400);
-            }
-        }
+        if (stateId != null) query.setParameter("state", LeadState.fromId(stateId));
         if (userId != null) query.setParameter("userId", userId);
         if (softDeleted != null) query.setParameter("softDeleted", softDeleted);
-
-        return query.getResultList();
+        if (search != null && !search.isEmpty()) query.setParameter("search", "%" + search.toLowerCase() + "%");
+        
+        return query.setFirstResult(first).setMaxResults(size).getResultList();
     }
 
     /**
-     * Alterar o estado de várias leads ao mesmo tempo. 
-     * É o que chamo de "Update Atómico" - uma só viagem à base de dados para mudar tudo.
+     * Calcula o total de registos que correspondem aos critérios de filtragem.
+     * Utilizado para o cálculo de metadados de paginação no frontend.
+     */
+    public long countPaginated(Integer stateId, Long userId, Boolean softDeleted, String search) {
+        StringBuilder sb = new StringBuilder("SELECT COUNT(l) FROM LeadEntity l WHERE 1=1");
+        if (stateId != null) sb.append(" AND l.leadState = :state");
+        if (userId != null) sb.append(" AND l.owner.id = :userId");
+        if (softDeleted != null) sb.append(" AND l.softDeleted = :softDeleted");
+        else sb.append(" AND l.softDeleted = false");
+
+        if (search != null && !search.isEmpty()) {
+            sb.append(" AND (LOWER(l.titulo) LIKE :search OR LOWER(l.descricao) LIKE :search)");
+        }
+
+        TypedQuery<Long> query = em.createQuery(sb.toString(), Long.class);
+        if (stateId != null) query.setParameter("state", LeadState.fromId(stateId));
+        if (userId != null) query.setParameter("userId", userId);
+        if (softDeleted != null) query.setParameter("softDeleted", softDeleted);
+        if (search != null && !search.isEmpty()) query.setParameter("search", "%" + search.toLowerCase() + "%");
+
+        return query.getSingleResult();
+    }
+
+    /**
+     * Método auxiliar para filtragem sem paginação explícita.
+     */
+    public List<LeadEntity> findLeadsWithFilters(Integer stateId, Long userId, Boolean softDeleted) {
+        return findPaginated(stateId, userId, softDeleted, null, 0, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Executa uma atualização em massa do estado de eliminação lógica para um utilizador.
+     * @return O número de registos afetados.
      */
     public int bulkUpdateSoftDelete(Long userId, boolean newStatus) {
         return em.createQuery("UPDATE LeadEntity l SET l.softDeleted = :newStatus " +
@@ -85,8 +112,7 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * 3. NAMED QUERIES (Performance)
-     * Usa as definições que já tens na LeadEntity para casos fixos.
+     * Recupera leads ativas de um utilizador recorrendo a NamedQueries para otimização.
      */
     public List<LeadEntity> getLeadsByUserId(Long userId) {
         return em.createNamedQuery("lead.findLeadsByUserId", LeadEntity.class)
@@ -105,8 +131,7 @@ public class LeadDao extends AbstractDao<LeadEntity> implements Serializable {
     }
 
     /**
-     * A limpeza final. 
-     * Vou à tabela de leads e apago permanentemente tudo o que este user tinha na lixeira.
+     * Elimina permanentemente da base de dados todas as leads marcadas como 'softDeleted' de um utilizador.
      */
     public int emptyTrashByUserId(Long userId) {
         // JPQL para apagar as leads onde o owner é o utilizador e estão marcadas como softDeleted

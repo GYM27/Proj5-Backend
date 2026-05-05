@@ -157,6 +157,27 @@ public class ClientsBean {
         return toDTOList(clientsDao.findClientsWithFilters(filterId, false));
     }
 
+    /**
+     * Listagem paginada e filtrada de clientes.
+     */
+    public aor.paj.projecto5.dto.PaginatedResponseDTO<ClientsDTO> listClientsPaginated(String token, Long userId, Boolean softDelete, String search, int page, int size) {
+        UserEntity requester = tokenBean.getUserEntityByToken(token);
+        if (requester == null) throw new WebApplicationException(401);
+        
+        // Regra de negócio: Admin vê todos ou de um user específico, utilizador normal vê apenas os seus.
+        Long filterId = (requester.getUserRole() == UserRoles.ADMIN) ? userId : requester.getId();
+        int first = (page - 1) * size;
+        
+        logger.info("LISTAGEM PAGINADA: user=" + requester.getUsername() + ", filterId=" + filterId + ", trash=" + softDelete + ", search=" + search);
+        
+        List<ClientsEntity> entities = clientsDao.findPaginated(filterId, softDelete, search, first, size);
+        long totalItems = clientsDao.countPaginated(filterId, softDelete, search);
+        
+        logger.info("RESULTADO: itens encontrados=" + entities.size() + ", total global=" + totalItems);
+        
+        return new aor.paj.projecto5.dto.PaginatedResponseDTO<>(toDTOList(entities), totalItems, page, size);
+    }
+
     public List<ClientsDTO> listDeletedClientsDTO(String token, Long userId) {
         UserEntity requester = tokenBean.getUserEntityByToken(token);
         if (requester == null) throw new WebApplicationException(401);
